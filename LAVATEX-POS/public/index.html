@@ -168,7 +168,7 @@
                             <div class="resumen-row" style="color: #dc2626; font-weight: bold;"><span>Saldo Pendiente:</span><span id="lblSaldo">$0 COP</span></div>
                         </div>
 
-                        <button type="submit" class="btn" style="margin-top: 15px;">Generar Orden y Ver Ticket</button>
+                        <button type="submit" id="btnCrearOrden" class="btn" style="margin-top: 15px;">Generar Orden y Ver Ticket</button>
                     </form>
                 </div>
 
@@ -572,7 +572,12 @@
         async function crearOrden(e) {
             e.preventDefault();
             const alertBox = document.getElementById('formAlertOrden');
+            const btnCrear = document.getElementById('btnCrearOrden');
+
             if(itemsOrdenActual.length === 0) { alertBox.className = 'alert alert-error'; alertBox.innerText = 'Debe agregar al menos un servicio.'; alertBox.style.display = 'block'; return; }
+
+            btnCrear.disabled = true;
+            btnCrear.innerText = 'Generando orden...';
 
             const nuevaOrden = {
                 cliente_id: document.getElementById('selectCliente').value,
@@ -583,15 +588,27 @@
                 observaciones: document.getElementById('observacionesOrden').value
             };
 
-            const res = await fetch('/api/ordenes', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(nuevaOrden) });
-            const result = await res.json();
+            try {
+                const res = await fetch('/api/ordenes', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(nuevaOrden) });
+                const result = await res.json();
 
-            if(res.ok) {
-                alertBox.className = 'alert alert-success'; alertBox.innerText = `¡Orden ${result.codigo_orden} creada!`; alertBox.style.display = 'block';
-                itemsOrdenActual = []; document.getElementById('orderForm').reset(); renderizarItemsOrden(); cargarTablaOrdenesRecientes();
-                verTicket(result.ordenId);
-            } else { alertBox.className = 'alert alert-error'; alertBox.innerText = result.message; alertBox.style.display = 'block'; }
-            setTimeout(() => alertBox.style.display = 'none', 4000);
+                if(res.ok) {
+                    alertBox.className = 'alert alert-success'; alertBox.innerText = `¡Orden ${result.codigo_orden} creada!`; alertBox.style.display = 'block';
+                    itemsOrdenActual = []; 
+                    document.getElementById('orderForm').reset(); 
+                    renderizarItemsOrden(); 
+                    cargarTablaOrdenesRecientes();
+                    verTicket(result.ordenId);
+                } else { 
+                    alertBox.className = 'alert alert-error'; alertBox.innerText = result.message; alertBox.style.display = 'block'; 
+                }
+            } catch (error) {
+                alertBox.className = 'alert alert-error'; alertBox.innerText = 'Error de conexión con el servidor.'; alertBox.style.display = 'block';
+            } finally {
+                btnCrear.disabled = false;
+                btnCrear.innerText = 'Generar Orden y Ver Ticket';
+                setTimeout(() => alertBox.style.display = 'none', 4000);
+            }
         }
 
         async function cargarTablaOrdenesRecientes() {
@@ -719,7 +736,6 @@
                 document.getElementById('t_abono').innerText = `Abono: $${formatoMoneda(t.orden.abono)} COP`;
                 document.getElementById('t_saldo').innerText = `Saldo Pendiente: $${formatoMoneda(t.orden.saldo)} COP`;
                 
-                // Configurar el botón de WhatsApp del modal ticket
                 document.getElementById('btnWhatsAppTicket').setAttribute('onclick', `enviarWhatsapp(${ordenId})`);
                 
                 document.getElementById('modalTicket').style.display = 'flex';

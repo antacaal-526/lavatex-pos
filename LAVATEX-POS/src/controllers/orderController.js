@@ -88,7 +88,7 @@ const crearOrden = (req, res) => {
 
     const ahora = new Date();
     const fechaStr = ahora.toISOString().slice(0, 10).replace(/-/g, '');
-    const timestampUnico = ahora.getTime().toString().slice(-4); // Últimos 4 dígitos del timestamp para garantizar unicidad absoluta
+    const timestampUnico = ahora.getTime().toString().slice(-4);
     const codigo_orden = `ORD-${fechaStr}-${timestampUnico}`;
 
     let subtotal = 0;
@@ -209,7 +209,7 @@ const actualizarEstadoOrden = (req, res) => {
     });
 };
 
-// Generar enlace detallado para notificación de WhatsApp con descripción exacta de prendas
+// Generar enlace detallado para notificación de WhatsApp diferenciando recepción y listo para entrega
 const obtenerMensajeWhatsapp = (req, res) => {
     const { id } = req.params;
 
@@ -229,14 +229,14 @@ const obtenerMensajeWhatsapp = (req, res) => {
             let tel = orden.cliente_telefono.replace(/\D/g, '');
             if (tel.length === 10) tel = '57' + tel;
 
-            const estadoNormalizado = (orden.estado || '').trim().toLowerCase();
+            const estadoOrden = (orden.estado || '').trim().toLowerCase();
             let detallePrendas = items.map(i => `• ${i.cantidad} ${i.servicio_nombre}`).join('\n');
             if (!detallePrendas) detallePrendas = '• Prendas generales de lavandería';
 
             let textoMensaje = "";
 
-            if (estadoNormalizado === 'listo para entrega' || estadoNormalizado === 'listo') {
-                textoMensaje = `Hola, ${orden.cliente_nombre}. Te informamos que tu pedido número ${orden.codigo_orden} ya está listo para entrega. Las prendas correspondientes a tu pedido son:\n${detallePrendas}\nPuedes acercarte para recogerlo. ¡Gracias por confiar en nosotros!`;
+            if (estadoOrden.includes('listo')) {
+                textoMensaje = `Hola, ${orden.cliente_nombre}. Te informamos que tu pedido número ${orden.codigo_orden} ya está listo para entrega. Las prendas correspondientes a tu pedido son:\n${detallePrendas}\nPuedes pasar a recogerlas cuando gustes. ¡Gracias por confiar en nosotros!`;
             } else {
                 textoMensaje = `🧺 *LAVANDERÍA LAVATEX*\n\n¡Hola ${orden.cliente_nombre}! Hemos recibido tu pedido *${orden.codigo_orden}*.\n\n` +
                                 `📋 *Detalle de prendas recibidas:*\n${detallePrendas}\n\n` +
