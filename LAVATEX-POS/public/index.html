@@ -226,7 +226,10 @@
                         </div>
 
                         <div class="form-group"><label>Abono Inicial ($ COP)</label><input type="number" id="abonoOrden" value="0" min="0" class="form-control" onchange="calcularTotalesOrden()"></div>
-                        <div class="form-group"><label>Fecha y Hora Estimada de Entrega (Calendario)</label><input type="datetime-local" id="fechaEntregaOrden" class="form-control"></div>
+                        
+                        <!-- CAMBIADO A TIPO DATE PARA SOLO SELECCIONAR FECHA -->
+                        <div class="form-group"><label>Fecha Estimada de Entrega (Calendario)</label><input type="date" id="fechaEntregaOrden" class="form-control"></div>
+                        
                         <div class="form-group"><label>Observaciones Generales</label><input type="text" id="observacionesOrden" class="form-control" placeholder="Ej. Entregar doblado"></div>
 
                         <div class="resumen-caja">
@@ -631,8 +634,8 @@
             if(rS.status === 'success') { serviciosCache = rS.data; }
             
             const maniana = new Date();
-            maniana.setHours(maniana.getHours() + 24);
-            document.getElementById('fechaEntregaOrden').value = maniana.toISOString().slice(0, 16);
+            maniana.setDate(maniana.getDate() + 1);
+            document.getElementById('fechaEntregaOrden').value = maniana.toISOString().slice(0, 10);
 
             cargarTablaOrdenesRecientes();
         }
@@ -1094,7 +1097,7 @@
                 const t = result.ticket;
                 document.getElementById('t_codigo').innerText = `Recibo N° ${t.orden.codigo_orden}`;
                 
-                // Mantiene fija la fecha y hora original en la que se generó la orden por primera vez
+                // Muestra la fecha y hora EXACTA en la que se genera/crea el recibo por primera vez
                 const fechaOriginal = new Date(t.orden.fecha_recepcion).toLocaleString('es-CO', {
                     year: 'numeric',
                     month: '2-digit',
