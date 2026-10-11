@@ -1,21 +1,35 @@
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 
-const dbPath = path.resolve(__dirname, '../../lavatex_pos.db');
+let db;
 
-const db = new sqlite3.Database(dbPath, (err) => {
-    if (err) {
-        console.error('Error al conectar con la base de datos SQLite:', err.message);
-    } else {
-        console.log('Base de datos conectada correctamente en:', dbPath);
-        inicializarTablas();
-    }
-});
+// Verificamos si estamos usando Turso en la nube o SQLite local
+if (process.env.TURSO_DATABASE_URL) {
+    // Configuración para la nube (Turso / LibSQL)
+    const { createClient } = require('@libsql/client');
+    const client = createClient({
+        url: process.env.TURSO_DATABASE_URL,
+        authToken: process.env.TURSO_AUTH_TOKEN,
+    });
+    
+    console.log('Conectado a la base de datos en la nube (Turso).');
+    db = client;
+} else {
+    // Configuración local (SQLite tradicional)
+    const dbPath = path.resolve(__dirname, '../../lavatex_pos.db');
+    db = new sqlite3.Database(dbPath, (err) => {
+        if (err) {
+            console.error('Error al conectar con SQLite local:', err.message);
+        } else {
+            console.log('Base de datos SQLite local conectada en:', dbPath);
+            inicializarTablasLocal(db);
+        }
+    });
+}
 
-function inicializarTablas() {
-    db.serialize(() => {
-        // Tabla de Clientes
-        db.run(`CREATE TABLE IF NOT EXISTS clientes (
+function inicializarTablasLocal(database) {
+    database.serialize(() => {
+        database.run(`CREATE TABLE IF NOT EXISTS clientes (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             nombre_completo TEXT NOT NULL,
             tipo_identificacion TEXT,
@@ -29,8 +43,7 @@ function inicializarTablas() {
             fecha_registro DATETIME DEFAULT CURRENT_TIMESTAMP
         )`);
 
-        // Tabla de Servicios
-        db.run(`CREATE TABLE IF NOT EXISTS servicios (
+        database.run(`CREATE TABLE IF NOT EXISTS servicios (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             nombre TEXT NOT NULL,
             descripcion TEXT,
@@ -39,10 +52,7 @@ function inicializarTablas() {
             tiempo_estimado_horas INTEGER DEFAULT 24,
             activo INTEGER DEFAULT 1
         )`, () => {
-            // Añadir columna activo si la tabla ya existía de antes
-            db.run(`ALTER TABLE servicios ADD COLUMN activo INTEGER DEFAULT 1`, (err) => {});
-
-            db.get(`SELECT COUNT(*) as count FROM servicios`, (err, row) => {
+            database.get(`SELECT COUNT(*) as count FROM servicios`, (err, row) => {
                 if (row && row.count === 0) {
                     const serviciosDefault = [
                         ['Lavado y Planchado por Kilo', 'Lavado general por kilogramo', 'peso', 5000, 24, 1],
@@ -51,15 +61,14 @@ function inicializarTablas() {
                         ['Chaqueta / Abrigo', 'Prenda delicada o pesada', 'unidad', 8000, 48, 1],
                         ['Edredón / Cobija', 'Lavado especial de ropa de cama', 'unidad', 15000, 48, 1]
                     ];
-                    const stmt = db.prepare(`INSERT INTO servicios (nombre, descripcion, unidad_cobro, precio, tiempo_estimado_horas, activo) VALUES (?, ?, ?, ?, ?, ?)`);
+                    const stmt = database.prepare(`INSERT INTO servicios (nombre, descripcion, unidad_cobro, precio, tiempo_estimado_horas, activo) VALUES (?, ?, ?, ?, ?, ?)`);
                     serviciosDefault.forEach(s => stmt.run(s));
                     stmt.finalize();
                 }
             });
         });
 
-        // Tabla de Órdenes
-        db.run(`CREATE TABLE IF NOT EXISTS ordenes (
+        database.run(`CREATE TABLE IF NOT EXISTS ordenes (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             codigo_orden TEXT UNIQUE NOT NULL,
             cliente_id INTEGER,
@@ -74,12 +83,9 @@ function inicializarTablas() {
             fecha_entrega_estimada DATETIME,
             observaciones TEXT,
             FOREIGN KEY (cliente_id) REFERENCES clientes(id)
-        )`, () => {
-            db.run(`ALTER TABLE ordenes ADD COLUMN ubicacion_fisica TEXT DEFAULT 'Estantería Principal'`, (err) => {});
-        });
+        )`);
 
-        // Tabla de Detalle de Órdenes
-        db.run(`CREATE TABLE IF NOT EXISTS detalle_orden (
+        database.run(`CREATE TABLE IF NOT EXISTS detalle_orden (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             orden_id INTEGER,
             servicio_id INTEGER,
@@ -91,8 +97,7 @@ function inicializarTablas() {
             FOREIGN KEY (servicio_id) REFERENCES servicios(id)
         )`);
 
-        // Tabla de Historial de Estados
-        db.run(`CREATE TABLE IF NOT EXISTS historial_estados (
+        database.run(`CREATE TABLE IF NOT EXISTS historial_estados (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             orden_id INTEGER,
             estado_anterior TEXT,
@@ -102,8 +107,7 @@ function inicializarTablas() {
             FOREIGN KEY (orden_id) REFERENCES ordenes(id)
         )`);
 
-        // Tabla de Turnos / Caja
-        db.run(`CREATE TABLE IF NOT EXISTS turnos_caja (
+        database.run(`CREATE TABLE IF NOT EXISTS turnos_caja (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             monto_apertura REAL NOT NULL,
             monto_cierre_efectivo REAL,
@@ -114,8 +118,7 @@ function inicializarTablas() {
             observaciones TEXT
         )`);
 
-        // Tabla de Movimientos de Caja
-        db.run(`CREATE TABLE IF NOT EXISTS movimientos_caja (
+        database.run(`CREATE TABLE IF NOT EXISTS movimientos_caja (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             turno_id INTEGER,
             orden_id INTEGER,
@@ -128,8 +131,7 @@ function inicializarTablas() {
             FOREIGN KEY (orden_id) REFERENCES ordenes(id)
         )`);
 
-        // Tabla de Insumos
-        db.run(`CREATE TABLE IF NOT EXISTS insumos (
+        database.run(`CREATE TABLE IF NOT EXISTS insumos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             nombre TEXT NOT NULL,
             unidad_medida TEXT NOT NULL,
@@ -138,8 +140,7 @@ function inicializarTablas() {
             costo_unitario REAL DEFAULT 0
         )`);
 
-        // Tabla de Movimientos de Inventario
-        db.run(`CREATE TABLE IF NOT EXISTS movimientos_inventario (
+        database.run(`CREATE TABLE IF NOT EXISTS movimientos_inventario (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             insumo_id INTEGER,
             tipo TEXT NOT NULL,
@@ -147,9 +148,7 @@ function inicializarTablas() {
             motivo TEXT,
             fecha DATETIME DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (insumo_id) REFERENCES insumos(id)
-        )`, () => {
-            console.log('Base de datos completa y optimizada con administración de servicios.');
-        });
+        )`);
     });
 }
 
