@@ -4,14 +4,11 @@ const path = require('path');
 let db;
 
 if (process.env.TURSO_DATABASE_URL) {
-    // Convertimos la URL libsql:// a https:// para usar la API HTTP nativa de Turso
     let tursoUrl = process.env.TURSO_DATABASE_URL.replace('libsql://', 'https://');
     if (!tursoUrl.endsWith('/')) tursoUrl += '/';
     const authToken = process.env.TURSO_AUTH_TOKEN;
 
-    // Función auxiliar para ejecutar peticiones HTTP a Turso
     async function tursoQuery(sql, params = []) {
-        const statements = [{ q: sql, params: params.map(p => (p === undefined ? null : p)) }];
         const response = await fetch(`${tursoUrl}v2/pipeline`, {
             method: 'POST',
             headers: {
@@ -32,17 +29,16 @@ if (process.env.TURSO_DATABASE_URL) {
             throw new Error(`SQL Error: ${result.error.message}`);
         }
 
-        const cols = result.response.result.cols.map(c => c.name);
-        const rows = result.response.result.rows.map(row => {
+        const cols = result.response.result.cols ? result.response.result.cols.map(c => c.name) : [];
+        const rows = result.response.result.rows ? result.response.result.rows.map(row => {
             const obj = {};
             row.forEach((val, index) => {
-                // Manejo de tipos de datos devueltos por Turso
                 let v = val.value !== undefined ? val.value : val;
                 if (val.type === 'integer') v = Number(v);
                 obj[cols[index]] = v;
             });
             return obj;
-        });
+        }) : [];
 
         return {
             rows,
@@ -51,7 +47,116 @@ if (process.env.TURSO_DATABASE_URL) {
         };
     }
 
-    // Adaptador de compatibilidad idéntico a sqlite3 usando HTTP puro
+    // Función para inicializar las tablas en Turso si no existen
+    async function inicializarTablasTurso() {
+        const queries = [
+            `CREATE TABLE IF NOT EXISTS clientes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                nombre_completo TEXT NOT NULL,
+                tipo_identificacion TEXT,
+                numero_identificacion TEXT UNIQUE,
+                telefono TEXT NOT NULL,
+                correo TEXT,
+                direccion TEXT,
+                barrio TEXT,
+                observaciones TEXT,
+                preferencias TEXT,
+                fecha_registro DATETIME DEFAULT CURRENT_TIMESTAMP
+            )`,
+            `CREATE TABLE IF NOT EXISTS servicios (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                nombre TEXT NOT NULL,
+                descripcion TEXT,
+                unidad_cobro TEXT NOT NULL,
+                precio REAL NOT NULL,
+                tiempo_estimado_horas INTEGER DEFAULT 24,
+                activo INTEGER DEFAULT 1
+            )`,
+            `CREATE TABLE IF NOT EXISTS ordenes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                codigo_orden TEXT UNIQUE NOT NULL,
+                cliente_id INTEGER,
+                subtotal REAL NOT NULL,
+                descuento REAL DEFAULT 0,
+                total REAL NOT NULL,
+                abono REAL DEFAULT 0,
+                saldo REAL NOT NULL,
+                estado TEXT DEFAULT 'Recibido',
+                ubicacion_fisica TEXT DEFAULT 'Estantería Principal',
+                fecha_recepcion DATETIME DEFAULT CURRENT_TIMESTAMP,
+                fecha_entrega_estimada DATETIME,
+                observaciones TEXT,
+                FOREIGN KEY (cliente_id) REFERENCES clientes(id)
+            )`,
+            `CREATE TABLE IF NOT EXISTS detalle_orden (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                orden_id INTEGER,
+                servicio_id INTEGER,
+                cantidad REAL NOT NULL,
+                precio_unitario REAL NOT NULL,
+                subtotal_item REAL NOT NULL,
+                observacion_prenda TEXT,
+                FOREIGN KEY (orden_id) REFERENCES ordenes(id),
+                FOREIGN KEY (servicio_id) REFERENCES servicios(id)
+            )`,
+            `CREATE TABLE IF NOT EXISTS historial_estados (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                orden_id INTEGER,
+                estado_anterior TEXT,
+                estado_nuevo TEXT NOT NULL,
+                observacion TEXT,
+                fecha_cambio DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (orden_id) REFERENCES ordenes(id)
+            )`,
+            `CREATE TABLE IF NOT EXISTS turnos_caja (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                monto_apertura REAL NOT NULL,
+                monto_cierre_efectivo REAL,
+                diferencia REAL,
+                estado TEXT DEFAULT 'ABIERTA',
+                fecha_apertura DATETIME DEFAULT CURRENT_TIMESTAMP,
+                fecha_cierre DATETIME,
+                observaciones TEXT
+            )`,
+            `CREATE TABLE IF NOT EXISTS movimientos_caja (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                turno_id INTEGER,
+                orden_id INTEGER,
+                tipo TEXT NOT NULL,
+                monto REAL NOT NULL,
+                metodo_pago TEXT DEFAULT 'Efectivo',
+                concepto TEXT,
+                fecha DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (turno_id) REFERENCES turnos_caja(id),
+                FOREIGN KEY (orden_id) REFERENCES ordenes(id)
+            )`,
+            `CREATE TABLE IF NOT EXISTS insumos (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                nombre TEXT NOT NULL,
+                unidad_medida TEXT NOT NULL,
+                stock_actual REAL DEFAULT 0,
+                stock_minimo REAL DEFAULT 5,
+                costo_unitario REAL DEFAULT 0
+            )`,
+            `CREATE TABLE IF NOT EXISTS movimientos_inventario (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                insumo_id INTEGER,
+                tipo TEXT NOT NULL,
+                cantidad REAL NOT NULL,
+                motivo TEXT,
+                fecha DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (insumo_id) REFERENCES insumos(id)
+            )`
+        ];
+
+        for (let q of queries) {
+            await tursoQuery(q);
+        }
+        console.log('¡Tablas de Turso verificadas e inicializadas correctamente en la nube!');
+    }
+
+    inicializarTablasTurso().catch(err => console.error('Error al inicializar tablas en Turso:', err.message));
+
     db = {
         run: function(sql, params = [], callback) {
             if (typeof params === 'function') {
@@ -109,9 +214,8 @@ if (process.env.TURSO_DATABASE_URL) {
             };
         }
     };
-    console.log('Adaptador Turso HTTP Puro inicializado correctamente.');
+    console.log('Adaptador Turso HTTP con auto-inicialización de esquema activo.');
 } else {
-    // Entorno local SQLite tradicional
     const dbPath = path.resolve(__dirname, '../../lavatex_pos.db');
     db = new sqlite3.Database(dbPath, (err) => {
         if (err) {
