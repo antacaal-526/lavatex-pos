@@ -10,7 +10,6 @@ if (process.env.TURSO_DATABASE_URL) {
 
     // Función robusta con tipado estricto para Turso HTTP
     async function tursoQuery(sql, params = []) {
-        // Mapeo estricto de tipos requerido por la API HTTP de Turso v2
         const formattedParams = params.map(p => {
             if (p === null || p === undefined) {
                 return { type: 'null' };
@@ -32,14 +31,14 @@ if (process.env.TURSO_DATABASE_URL) {
             body: JSON.stringify({ 
                 requests: [{ 
                     type: 'execute', 
-                    stmt: { sql, args: formattedParams } // CORREGIDO: Turso exige 'args' en lugar de 'params'
+                    stmt: { sql, args: formattedParams } 
                 }] 
             })
         });
 
         if (!response.ok) {
             const errText = await response.text();
-            throw new Error(`Error en Turso HTTP: ${response.status} - ${errText}`);
+            throw new Error(`Error en Turso HTTP: ${response.status}\n${errText}`);
         }
 
         const data = await response.json();
@@ -66,7 +65,7 @@ if (process.env.TURSO_DATABASE_URL) {
         };
     }
 
-    // Inicializar tablas automáticamente en la nube
+    // Inicializar tablas en la nube incluyendo la columna codigo directamente
     async function inicializarTablasTurso() {
         try {
             await tursoQuery(`CREATE TABLE IF NOT EXISTS clientes (
@@ -83,8 +82,10 @@ if (process.env.TURSO_DATABASE_URL) {
                 fecha_registro DATETIME DEFAULT CURRENT_TIMESTAMP
             )`);
 
+            // Si la tabla servicios antigua no tiene codigo, la recreamos limpiamente con el campo codigo
             await tursoQuery(`CREATE TABLE IF NOT EXISTS servicios (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                codigo TEXT,
                 nombre TEXT NOT NULL,
                 descripcion TEXT,
                 unidad_cobro TEXT NOT NULL,
@@ -92,6 +93,13 @@ if (process.env.TURSO_DATABASE_URL) {
                 tiempo_estimado_horas INTEGER DEFAULT 24,
                 activo INTEGER DEFAULT 1
             )`);
+
+            // Intentar añadir la columna en caso de que ya exista la tabla sin ella
+            try {
+                await tursoQuery(`ALTER TABLE servicios ADD COLUMN codigo TEXT`);
+            } catch (errCol) {
+                // Si ya existe la columna, Turso retornará error y lo ignoramos con seguridad
+            }
 
             await tursoQuery(`CREATE TABLE IF NOT EXISTS ordenes (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -175,7 +183,7 @@ if (process.env.TURSO_DATABASE_URL) {
                 FOREIGN KEY (insumo_id) REFERENCES insumos(id)
             )`);
 
-            console.log('¡Tablas verificadas en Turso con tipado estricto y clave args!');
+            console.log('¡Tablas verificadas en Turso con éxito!');
         } catch (e) {
             console.error('Error al inicializar tablas en Turso:', e.message);
         }
@@ -241,7 +249,7 @@ if (process.env.TURSO_DATABASE_URL) {
             };
         }
     };
-    console.log('Adaptador Turso HTTP con clave args activo.');
+    console.log('Adaptador Turso HTTP activo.');
 } else {
     const dbPath = path.resolve(__dirname, '../../lavatex_pos.db');
     db = new sqlite3.Database(dbPath, (err) => {
@@ -249,6 +257,18 @@ if (process.env.TURSO_DATABASE_URL) {
             console.error('Error al conectar con SQLite local:', err.message);
         } else {
             console.log('Base de datos SQLite local conectada en:', dbPath);
+            db.run(`CREATE TABLE IF NOT EXISTS servicios (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                codigo TEXT,
+                nombre TEXT NOT NULL,
+                descripcion TEXT,
+                unidad_cobro TEXT NOT NULL,
+                precio REAL NOT NULL,
+                tiempo_estimado_horas INTEGER DEFAULT 24,
+                activo INTEGER DEFAULT 1
+            )`, () => {
+                db.run(`ALTER TABLE servicios ADD COLUMN codigo TEXT`, () => {});
+            });
         }
     });
 }
