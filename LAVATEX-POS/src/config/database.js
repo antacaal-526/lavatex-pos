@@ -32,7 +32,7 @@ if (process.env.TURSO_DATABASE_URL) {
             body: JSON.stringify({ 
                 requests: [{ 
                     type: 'execute', 
-                    stmt: { sql, params: formattedParams } 
+                    stmt: { sql, args: formattedParams } // CORREGIDO: Turso exige 'args' en lugar de 'params'
                 }] 
             })
         });
@@ -175,7 +175,7 @@ if (process.env.TURSO_DATABASE_URL) {
                 FOREIGN KEY (insumo_id) REFERENCES insumos(id)
             )`);
 
-            console.log('¡Tablas verificadas en Turso con tipado estricto!');
+            console.log('¡Tablas verificadas en Turso con tipado estricto y clave args!');
         } catch (e) {
             console.error('Error al inicializar tablas en Turso:', e.message);
         }
@@ -241,7 +241,7 @@ if (process.env.TURSO_DATABASE_URL) {
             };
         }
     };
-    console.log('Adaptador Turso HTTP con tipado estricto activo.');
+    console.log('Adaptador Turso HTTP con clave args activo.');
 } else {
     const dbPath = path.resolve(__dirname, '../../lavatex_pos.db');
     db = new sqlite3.Database(dbPath, (err) => {
