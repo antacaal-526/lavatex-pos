@@ -145,8 +145,8 @@
                             <select id="selectCliente" class="form-control" required><option value="">-- Seleccione cliente --</option></select>
                         </div>
                         <div class="form-group">
-                            <label>Buscar y Agregar Servicio (Escriba nombre o abreviatura ej. PH) *</label>
-                            <input type="text" id="filtroBuscarServicio" class="form-control" placeholder="Escriba código/abreviatura o servicio..." onkeyup="filtrarServiciosOrden()" style="margin-bottom: 8px;">
+                            <label>Buscar y Agregar Servicio (Escriba código ej. PH o nombre) *</label>
+                            <input type="text" id="filtroBuscarServicio" class="form-control" placeholder="Escriba código (ej. PH) o servicio..." onkeyup="filtrarServiciosOrden()" style="margin-bottom: 8px;">
                             <select id="selectServicio" class="form-control" onchange="agregarItemOrden()"><option value="">-- Seleccione servicio de la lista --</option></select>
                         </div>
 
@@ -528,7 +528,7 @@
 
         function actualizarSelectServicios(servicios) {
             const select = document.getElementById('selectServicio');
-            select.innerHTML = `<option value="">-- Seleccione servicio de la lista --</option>` + servicios.map(s => `<option value="${s.id}">[${s.codigo || ''}] ${s.nombre} - $${formatoMoneda(s.precio)} COP</option>`).join('');
+            select.innerHTML = `<option value="">-- Seleccione servicio de la lista --</option>` + servicios.map(s => `<option value="${s.id}">[${s.codigo || 'S/C'}] ${s.nombre} - $${formatoMoneda(s.precio)} COP</option>`).join('');
         }
 
         function filtrarServiciosOrden() {
@@ -536,9 +536,18 @@
             const filtrados = serviciosCache.filter(s => (s.codigo && s.codigo.toLowerCase().includes(filtro)) || s.nombre.toLowerCase().includes(filtro) || (s.descripcion && s.descripcion.toLowerCase().includes(filtro)));
             actualizarSelectServicios(filtrados);
 
-            if(filtro.length >= 1 && filtrados.length === 1) {
+            // Si coincide exactamente con el código introducido (ej. 'ph'), seleccionarlo y agregarlo automáticamente
+            const matchExacto = serviciosCache.find(s => s.codigo && s.codigo.toLowerCase() === filtro);
+            if(matchExacto) {
+                document.getElementById('selectServicio').value = matchExacto.id;
+                agregarItemOrden();
+                document.getElementById('filtroBuscarServicio').value = "";
+                actualizarSelectServicios(serviciosCache);
+            } else if(filtrados.length === 1 && filtro.length >= 2) {
                 document.getElementById('selectServicio').value = filtrados[0].id;
                 agregarItemOrden();
+                document.getElementById('filtroBuscarServicio').value = "";
+                actualizarSelectServicios(serviciosCache);
             }
         }
 
@@ -556,12 +565,13 @@
             }
 
             let observacionPrenda = prompt(`Detalle o tipo de prenda (Ej. BLANCA, Cuero, etc.):`, "");
-            let subtotalCalculado = parseFloat(cantidad) * serv.precio;
+            let cantidadNum = parseFloat(cantidad);
+            let subtotalCalculado = cantidadNum * serv.precio;
 
             itemsOrdenActual.push({ 
                 servicio_id: serv.id, 
                 nombre: serv.nombre, 
-                cantidad: parseFloat(cantidad), 
+                cantidad: cantidadNum, 
                 precio_unitario: serv.precio,
                 subtotal_item: subtotalCalculado,
                 observacion_prenda: observacionPrenda || ''
