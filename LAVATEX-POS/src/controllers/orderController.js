@@ -240,7 +240,7 @@ const obtenerMensajeWhatsapp = (req, res) => {
             if (estadoNormalizado === 'listo para entrega' || estadoNormalizado === 'listo') {
                 textoMensaje = `Hola, ${orden.cliente_nombre}. Te informamos que tu pedido número ${orden.codigo_orden} ya está listo para entrega. Las prendas correspondientes a tu pedido son:\n${detallePrendas}\nPuedes acercarte para recogerlo. ¡Gracias por confiar en nosotros!`;
             } else {
-                textoMensaje = `🧺 *LAVANDERÍA LAVATEX*\n\n¡Hola ${orden.cliente_nombre}! Hemos recibido tu pedido *${orden.codigo_orden*}.\n\n` +
+                textoMensaje = `🧺 *LAVANDERÍA LAVATEX*\n\n¡Hola ${orden.cliente_nombre}! Hemos recibido tu pedido *${orden.codigo_orden}*.\n\n` +
                                 `📋 *Detalle de prendas recibidas:*\n${detallePrendas}\n\n` +
                                 `💵 *Total a Pagar:* $${orden.total.toLocaleString('es-CO')} COP\n` +
                                 `💳 *Abono Inicial:* $${orden.abono.toLocaleString('es-CO')} COP\n` +
