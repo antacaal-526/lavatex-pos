@@ -11,12 +11,13 @@ const obtenerServicios = (req, res) => {
 };
 
 const crearServicio = (req, res) => {
-    const { nombre, descripcion, unidad_cobro, precio, tiempo_estimado_horas } = req.body;
+    const { codigo, nombre, descripcion, unidad_cobro, precio, tiempo_estimado_horas } = req.body;
     if (!nombre || precio === undefined || !unidad_cobro) {
         return res.status(400).json({ status: 'error', message: 'El nombre, precio y unidad de cobro son obligatorios.' });
     }
-    const query = `INSERT INTO servicios (nombre, descripcion, unidad_cobro, precio, tiempo_estimado_horas, activo) VALUES (?, ?, ?, ?, ?, 1)`;
-    db.run(query, [nombre, descripcion || '', unidad_cobro, parseFloat(precio), parseInt(tiempo_estimado_horas) || 24], function(err) {
+    const codigoAbrev = codigo ? codigo.toUpperCase().trim() : nombre.slice(0, 3).toUpperCase();
+    const query = `INSERT INTO servicios (codigo, nombre, descripcion, unidad_cobro, precio, tiempo_estimado_horas, activo) VALUES (?, ?, ?, ?, ?, ?, 1)`;
+    db.run(query, [codigoAbrev, nombre, descripcion || '', unidad_cobro, parseFloat(precio), parseInt(tiempo_estimado_horas) || 24], function(err) {
         if (err) return res.status(500).json({ status: 'error', message: err.message });
         res.status(201).json({ status: 'success', message: 'Servicio creado exitosamente.', servicioId: this.lastID });
     });
@@ -24,14 +25,15 @@ const crearServicio = (req, res) => {
 
 const actualizarServicio = (req, res) => {
     const { id } = req.params;
-    const { nombre, descripcion, unidad_cobro, precio, tiempo_estimado_horas, activo } = req.body;
+    const { codigo, nombre, descripcion, unidad_cobro, precio, tiempo_estimado_horas, activo } = req.body;
 
     if (!nombre || precio === undefined || !unidad_cobro) {
         return res.status(400).json({ status: 'error', message: 'El nombre, precio y unidad de cobro son obligatorios.' });
     }
 
-    const query = `UPDATE servicios SET nombre = ?, descripcion = ?, unidad_cobro = ?, precio = ?, tiempo_estimado_horas = ?, activo = ? WHERE id = ?`;
-    db.run(query, [nombre, descripcion || '', unidad_cobro, parseFloat(precio), parseInt(tiempo_estimado_horas) || 24, activo !== undefined ? activo : 1, id], function(err) {
+    const codigoAbrev = codigo ? codigo.toUpperCase().trim() : nombre.slice(0, 3).toUpperCase();
+    const query = `UPDATE servicios SET codigo = ?, nombre = ?, descripcion = ?, unidad_cobro = ?, precio = ?, tiempo_estimado_horas = ?, activo = ? WHERE id = ?`;
+    db.run(query, [codigoAbrev, nombre, descripcion || '', unidad_cobro, parseFloat(precio), parseInt(tiempo_estimado_horas) || 24, activo !== undefined ? activo : 1, id], function(err) {
         if (err) return res.status(500).json({ status: 'error', message: err.message });
         res.json({ status: 'success', message: 'Servicio actualizado correctamente.' });
     });
@@ -71,7 +73,7 @@ const obtenerOrdenes = (req, res) => {
 };
 
 const crearOrden = (req, res) => {
-    const { cliente_id, items, descuento = 0, abono = 0, observaciones = '', fecha_entrega_estimada } = req.body;
+    const { cliente_id, items, abono = 0, observaciones = '', fecha_entrega_estimada } = req.body;
 
     if (!cliente_id || !items || items.length === 0) {
         return res.status(400).json({ status: 'error', message: 'Debe seleccionar un cliente y al menos un servicio.' });
@@ -83,9 +85,9 @@ const crearOrden = (req, res) => {
     const codigo_orden = `ORD-${fechaStr}-${timestampUnico}`;
 
     let subtotal = 0;
-    items.forEach(item => { subtotal += item.cantidad * item.precio_unitario; });
+    items.forEach(item => { subtotal += parseFloat(item.subtotal_item) || 0; });
 
-    const total = Math.max(0, subtotal - parseFloat(descuento));
+    const total = subtotal;
     const montoAbono = parseFloat(abono) || 0;
     const saldo = Math.max(0, total - montoAbono);
     
@@ -93,9 +95,9 @@ const crearOrden = (req, res) => {
     if (!fecha_entrega_estimada) fechaEntrega.setHours(fechaEntrega.getHours() + 24);
 
     const queryOrden = `INSERT INTO ordenes (codigo_orden, cliente_id, subtotal, descuento, total, abono, saldo, fecha_entrega_estimada, observaciones, estado) 
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Recibido')`;
+                        VALUES (?, ?, ?, 0, ?, ?, ?, ?, ?, 'Recibido')`;
     
-    db.run(queryOrden, [codigo_orden, cliente_id, subtotal, descuento, total, montoAbono, saldo, fechaEntrega.toISOString(), observaciones], function(err) {
+    db.run(queryOrden, [codigo_orden, cliente_id, total, total, montoAbono, saldo, fechaEntrega.toISOString(), observaciones], function(err) {
         if (err) {
             return res.status(500).json({ status: 'error', message: err.message });
         }
@@ -105,7 +107,6 @@ const crearOrden = (req, res) => {
 
         function insertarSiguienteItem() {
             if (index >= items.length) {
-                // Registrar abono en caja si aplica
                 if (montoAbono > 0) {
                     db.get(`SELECT id FROM turnos_caja WHERE estado = 'ABIERTA' ORDER BY id DESC LIMIT 1`, [], (errCaja, turno) => {
                         if (turno) {
@@ -124,7 +125,7 @@ const crearOrden = (req, res) => {
             }
 
             const item = items[index];
-            const subItem = item.cantidad * item.precio_unitario;
+            const subItem = parseFloat(item.subtotal_item) || 0;
             const queryDetalle = `INSERT INTO detalle_orden (orden_id, servicio_id, cantidad, precio_unitario, subtotal_item, observacion_prenda) VALUES (?, ?, ?, ?, ?, ?)`;
             
             db.run(queryDetalle, [ordenId, item.servicio_id, item.cantidad, item.precio_unitario, subItem, item.observacion_prenda || ''], (errDet) => {
@@ -214,7 +215,7 @@ const obtenerMensajeWhatsapp = (req, res) => {
             if (tel.length === 10) tel = '57' + tel;
 
             const estadoOrden = (orden.estado || '').trim().toLowerCase();
-            let detallePrendas = items.map(i => `• ${i.cantidad} ${i.servicio_nombre}`).join('\n');
+            let detallePrendas = items.map(i => `• ${i.cantidad} ${i.servicio_nombre}${i.observacion_prenda ? ' ('+i.observacion_prenda+')' : ''}`).join('\n');
             if (!detallePrendas) detallePrendas = '• Prendas generales de lavandería';
 
             let textoMensaje = "";

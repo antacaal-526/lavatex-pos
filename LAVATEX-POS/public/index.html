@@ -145,26 +145,23 @@
                             <select id="selectCliente" class="form-control" required><option value="">-- Seleccione cliente --</option></select>
                         </div>
                         <div class="form-group">
-                            <label>Buscar y Agregar Servicio *</label>
-                            <input type="text" id="filtroBuscarServicio" class="form-control" placeholder="Escriba para buscar servicio o prenda..." onkeyup="filtrarServiciosOrden()" style="margin-bottom: 8px;">
+                            <label>Buscar y Agregar Servicio (Escriba nombre o abreviatura ej. PH) *</label>
+                            <input type="text" id="filtroBuscarServicio" class="form-control" placeholder="Escriba código/abreviatura o servicio..." onkeyup="filtrarServiciosOrden()" style="margin-bottom: 8px;">
                             <select id="selectServicio" class="form-control" onchange="agregarItemOrden()"><option value="">-- Seleccione servicio de la lista --</option></select>
                         </div>
 
                         <div class="table-container" style="margin-bottom: 15px;">
                             <table>
-                                <thead><tr><th>Servicio / Prenda</th><th>Cant</th><th>Subtotal</th><th>X</th></tr></thead>
+                                <thead><tr><th>Servicio / Prenda</th><th>Cant</th><th>Subtotal ($)</th><th>X</th></tr></thead>
                                 <tbody id="itemsOrdenBody"><tr><td colspan="4" style="text-align: center; color: var(--text-muted);">Sin servicios agregados</td></tr></tbody>
                             </table>
                         </div>
 
-                        <div class="form-group"><label>Descuento ($ COP)</label><input type="number" id="descuentoOrden" value="0" min="0" class="form-control" onchange="calcularTotalesOrden()"></div>
                         <div class="form-group"><label>Abono Inicial ($ COP)</label><input type="number" id="abonoOrden" value="0" min="0" class="form-control" onchange="calcularTotalesOrden()"></div>
                         <div class="form-group"><label>Fecha y Hora Estimada de Entrega (Calendario)</label><input type="datetime-local" id="fechaEntregaOrden" class="form-control"></div>
                         <div class="form-group"><label>Observaciones Generales</label><input type="text" id="observacionesOrden" class="form-control" placeholder="Ej. Entregar doblado"></div>
 
                         <div class="resumen-caja">
-                            <div class="resumen-row"><span>Subtotal:</span><span id="lblSubtotal">$0 COP</span></div>
-                            <div class="resumen-row"><span>Descuento:</span><span id="lblDescuento">$0 COP</span></div>
                             <div class="resumen-row total"><span>Total a Pagar:</span><span id="lblTotal">$0 COP</span></div>
                             <div class="resumen-row"><span>Abono:</span><span id="lblAbono">$0 COP</span></div>
                             <div class="resumen-row" style="color: #dc2626; font-weight: bold;"><span>Saldo Pendiente:</span><span id="lblSaldo">$0 COP</span></div>
@@ -216,7 +213,8 @@
                     <div id="formAlertServicio" class="alert"></div>
                     <form id="servicioForm" onsubmit="guardarServicio(event)">
                         <input type="hidden" id="edit_servicio_id">
-                        <div class="form-group"><label>Nombre del Servicio *</label><input type="text" id="nombre_serv" class="form-control" required placeholder="Ej. Lavado Edredón King"></div>
+                        <div class="form-group"><label>Código / Abreviatura *</label><input type="text" id="codigo_serv" class="form-control" required placeholder="Ej. PH (Pantalón Hombre)"></div>
+                        <div class="form-group"><label>Nombre del Servicio *</label><input type="text" id="nombre_serv" class="form-control" required placeholder="Ej. PANTALON HOMBRE"></div>
                         <div class="form-group"><label>Descripción</label><input type="text" id="desc_serv" class="form-control" placeholder="Ej. Proceso especial en seco"></div>
                         <div class="form-group">
                             <label>Unidad de Cobro *</label>
@@ -227,7 +225,7 @@
                                 <option value="especial">Servicio Fijo Especial</option>
                             </select>
                         </div>
-                        <div class="form-group"><label>Precio ($ COP) *</label><input type="number" id="precio_serv" class="form-control" required min="0" placeholder="Ej. 15000"></div>
+                        <div class="form-group"><label>Precio ($ COP) *</label><input type="number" id="precio_serv" class="form-control" required min="0" placeholder="Ej. 10000"></div>
                         <div class="form-group"><label>Tiempo Estimado (Horas)</label><input type="number" id="tiempo_serv" class="form-control" value="24" min="1"></div>
                         <div class="form-group" id="grupoEstadoServicio" style="display:none;">
                             <label>Estado</label>
@@ -245,8 +243,8 @@
                     <h2>Servicios y Precios Vigentes</h2>
                     <div class="table-container">
                         <table>
-                            <thead><tr><th>Servicio</th><th>Unidad</th><th>Precio (COP)</th><th>Estado</th><th>Acciones</th></tr></thead>
-                            <tbody id="serviciosTableBody"><tr><td colspan="5" style="text-align: center;">Cargando...</td></tr></tbody>
+                            <thead><tr><th>Código</th><th>Servicio</th><th>Unidad</th><th>Precio (COP)</th><th>Estado</th><th>Acciones</th></tr></thead>
+                            <tbody id="serviciosTableBody"><tr><td colspan="6" style="text-align: center;">Cargando...</td></tr></tbody>
                         </table>
                     </div>
                 </div>
@@ -347,7 +345,6 @@
                     <div class="resumen-caja">
                         <div class="resumen-row"><span>Total Pedidos Creados:</span><span id="repTotalPedidos">0</span></div>
                         <div class="resumen-row"><span>Valor Subtotal Vendido:</span><span id="repSubtotal">$0 COP</span></div>
-                        <div class="resumen-row"><span>Descuentos Aplicados:</span><span id="repDescuentos" style="color:#dc2626;">$0 COP</span></div>
                         <div class="resumen-row total"><span>Total Vendido (Nominal):</span><span id="repTotalVendido">$0 COP</span></div>
                         <div class="resumen-row"><span>Abonos en Pedidos:</span><span id="repAbonos" style="color:#166534;">$0 COP</span></div>
                         <div class="resumen-row"><span>Dinero Recibido en Caja:</span><span id="repDineroCaja" style="color:#166534; font-weight:bold;">$0 COP</span></div>
@@ -382,7 +379,6 @@
             <hr>
             <div id="t_items" style="text-align:left;"></div>
             <hr>
-            <p id="t_subtotal" style="text-align:right;"></p>
             <p id="t_total" style="text-align:right; font-weight:bold;"></p>
             <p id="t_abono" style="text-align:right;"></p>
             <p id="t_saldo" style="text-align:right; font-weight:bold; color:#e11d48;"></p>
@@ -532,15 +528,15 @@
 
         function actualizarSelectServicios(servicios) {
             const select = document.getElementById('selectServicio');
-            select.innerHTML = `<option value="">-- Seleccione servicio de la lista --</option>` + servicios.map(s => `<option value="${s.id}">${s.nombre} - $${formatoMoneda(s.precio)} COP</option>`).join('');
+            select.innerHTML = `<option value="">-- Seleccione servicio de la lista --</option>` + servicios.map(s => `<option value="${s.id}">[${s.codigo || ''}] ${s.nombre} - $${formatoMoneda(s.precio)} COP</option>`).join('');
         }
 
         function filtrarServiciosOrden() {
             const filtro = document.getElementById('filtroBuscarServicio').value.toLowerCase().trim();
-            const filtrados = serviciosCache.filter(s => s.nombre.toLowerCase().includes(filtro) || (s.descripcion && s.descripcion.toLowerCase().includes(filtro)));
+            const filtrados = serviciosCache.filter(s => (s.codigo && s.codigo.toLowerCase().includes(filtro)) || s.nombre.toLowerCase().includes(filtro) || (s.descripcion && s.descripcion.toLowerCase().includes(filtro)));
             actualizarSelectServicios(filtrados);
 
-            if(filtro.length >= 2 && filtrados.length === 1) {
+            if(filtro.length >= 1 && filtrados.length === 1) {
                 document.getElementById('selectServicio').value = filtrados[0].id;
                 agregarItemOrden();
             }
@@ -559,13 +555,15 @@
                 return;
             }
 
-            let observacionPrenda = prompt(`Detalle o tipo de prenda (Ej. 2 Pantalones azules, Chaqueta de cuero, etc.):`, "");
+            let observacionPrenda = prompt(`Detalle o tipo de prenda (Ej. BLANCA, Cuero, etc.):`, "");
+            let subtotalCalculado = parseFloat(cantidad) * serv.precio;
 
             itemsOrdenActual.push({ 
                 servicio_id: serv.id, 
                 nombre: serv.nombre, 
                 cantidad: parseFloat(cantidad), 
                 precio_unitario: serv.precio,
+                subtotal_item: subtotalCalculado,
                 observacion_prenda: observacionPrenda || ''
             });
 
@@ -573,6 +571,13 @@
             document.getElementById('filtroBuscarServicio').value = "";
             actualizarSelectServicios(serviciosCache);
             renderizarItemsOrden();
+        }
+
+        function actualizarSubtotalItem(index, nuevoValor) {
+            let val = parseFloat(nuevoValor);
+            if(isNaN(val) || val < 0) val = 0;
+            itemsOrdenActual[index].subtotal_item = val;
+            calcularTotalesOrden();
         }
 
         function eliminarItemOrden(index) { itemsOrdenActual.splice(index, 1); renderizarItemsOrden(); }
@@ -584,7 +589,7 @@
                 <tr>
                     <td><strong>${item.nombre}</strong>${item.observacion_prenda ? `<br><small style="color:var(--text-muted);">Detalle: ${item.observacion_prenda}</small>` : ''}</td>
                     <td>${item.cantidad}</td>
-                    <td>$${formatoMoneda(item.cantidad * item.precio_unitario)}</td>
+                    <td><input type="number" class="form-control" value="${item.subtotal_item}" min="0" onchange="actualizarSubtotalItem(${index}, this.value)" style="padding:4px; width:110px;"></td>
                     <td><button type="button" onclick="eliminarItemOrden(${index})" style="background:#dc2626; color:white; border:none; padding:4px 8px; border-radius:4px; cursor:pointer;">X</button></td>
                 </tr>
             `).join('');
@@ -592,14 +597,10 @@
         }
 
         function calcularTotalesOrden() {
-            let subtotal = itemsOrdenActual.reduce((acc, item) => acc + (item.cantidad * item.precio_unitario), 0);
-            let descuento = parseFloat(document.getElementById('descuentoOrden').value) || 0;
-            let total = Math.max(0, subtotal - descuento);
+            let total = itemsOrdenActual.reduce((acc, item) => acc + (parseFloat(item.subtotal_item) || 0), 0);
             let abono = parseFloat(document.getElementById('abonoOrden').value) || 0;
             let saldo = Math.max(0, total - abono);
 
-            document.getElementById('lblSubtotal').innerText = `$${formatoMoneda(subtotal)} COP`;
-            document.getElementById('lblDescuento').innerText = `$${formatoMoneda(descuento)} COP`;
             document.getElementById('lblTotal').innerText = `$${formatoMoneda(total)} COP`;
             document.getElementById('lblAbono').innerText = `$${formatoMoneda(abono)} COP`;
             document.getElementById('lblSaldo').innerText = `$${formatoMoneda(saldo)} COP`;
@@ -623,7 +624,6 @@
             const nuevaOrden = {
                 cliente_id: document.getElementById('selectCliente').value,
                 items: itemsOrdenActual,
-                descuento: parseFloat(document.getElementById('descuentoOrden').value) || 0,
                 abono: parseFloat(document.getElementById('abonoOrden').value) || 0,
                 fecha_entrega_estimada: document.getElementById('fechaEntregaOrden').value,
                 observaciones: document.getElementById('observacionesOrden').value
@@ -784,7 +784,6 @@
                 document.getElementById('t_fecha').innerText = new Date(t.orden.fecha_recepcion).toLocaleString();
                 document.getElementById('t_cliente').innerText = `Cliente: ${t.orden.cliente_nombre || 'General'}\nCédula: ${t.orden.cliente_cedula || 'N/A'}\nTel: ${t.orden.cliente_telefono || 'N/A'}`;
                 document.getElementById('t_items').innerHTML = t.items.map(i => `<p>${i.cantidad}x ${i.servicio_nombre}${i.observacion_prenda ? ' ('+i.observacion_prenda+')' : ''} = $${formatoMoneda(i.subtotal_item)} COP</p>`).join('');
-                document.getElementById('t_subtotal').innerText = `Subtotal: $${formatoMoneda(t.orden.subtotal)} COP`;
                 document.getElementById('t_total').innerText = `TOTAL: $${formatoMoneda(t.orden.total)} COP`;
                 document.getElementById('t_abono').innerText = `Abono: $${formatoMoneda(t.orden.abono)} COP`;
                 document.getElementById('t_saldo').innerText = `Saldo Pendiente: $${formatoMoneda(t.orden.saldo)} COP`;
@@ -805,6 +804,7 @@
                 serviciosAdminCache = result.data;
                 document.getElementById('serviciosTableBody').innerHTML = serviciosAdminCache.map(s => `
                     <tr>
+                        <td><strong>[${s.codigo || 'S/C'}]</strong></td>
                         <td><strong>${s.nombre}</strong><br><small style="color:var(--text-muted);">${s.descripcion || ''}</small></td>
                         <td>${s.unidad_cobro}</td>
                         <td><strong>$${formatoMoneda(s.precio)} COP</strong></td>
@@ -824,6 +824,7 @@
             const id = document.getElementById('edit_servicio_id').value;
             
             const servicioData = {
+                codigo: document.getElementById('codigo_serv').value,
                 nombre: document.getElementById('nombre_serv').value,
                 descripcion: document.getElementById('desc_serv').value,
                 unidad_cobro: document.getElementById('unidad_serv').value,
@@ -866,6 +867,7 @@
             if(!serv) return;
 
             document.getElementById('edit_servicio_id').value = serv.id;
+            document.getElementById('codigo_serv').value = serv.codigo || '';
             document.getElementById('nombre_serv').value = serv.nombre;
             document.getElementById('desc_serv').value = serv.descripcion || '';
             document.getElementById('unidad_serv').value = serv.unidad_cobro;
@@ -995,7 +997,6 @@
                 const r = result.resumen;
                 document.getElementById('repTotalPedidos').innerText = r.totalPedidos;
                 document.getElementById('repSubtotal').innerText = `$${formatoMoneda(r.totalSubtotal)} COP`;
-                document.getElementById('repDescuentos').innerText = `-$${formatoMoneda(r.totalDescuentos)} COP`;
                 document.getElementById('repTotalVendido').innerText = `$${formatoMoneda(r.totalVendido)} COP`;
                 document.getElementById('repAbonos').innerText = `$${formatoMoneda(r.totalAbonosPedidos)} COP`;
                 document.getElementById('repDineroCaja').innerText = `$${formatoMoneda(r.dineroRecibidoCaja)} COP`;
