@@ -11,7 +11,12 @@ app.use(express.json());
 app.use(cors());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Base de datos SQLite (Archivo local o en memoria/disco persistente)
+// Ruta raíz explícita para evitar "Cannot GET /"
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+// Base de datos SQLite
 const dbPath = path.resolve(__dirname, 'lavatex.db');
 const db = new sqlite3.Database(dbPath, (err) => {
     if (err) {
@@ -25,7 +30,6 @@ const db = new sqlite3.Database(dbPath, (err) => {
 // Inicializar Tablas
 function inicializarBaseDatos() {
     db.serialize(() => {
-        // Clientes
         db.run(`CREATE TABLE IF NOT EXISTS clientes (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             nombre_completo TEXT NOT NULL,
@@ -35,7 +39,6 @@ function inicializarBaseDatos() {
             correo TEXT
         )`);
 
-        // Servicios y Tarifas
         db.run(`CREATE TABLE IF NOT EXISTS servicios (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             codigo TEXT,
@@ -47,7 +50,6 @@ function inicializarBaseDatos() {
             activo INTEGER DEFAULT 1
         )`);
 
-        // Órdenes / Pedidos
         db.run(`CREATE TABLE IF NOT EXISTS ordenes (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             codigo_orden TEXT UNIQUE NOT NULL,
@@ -63,7 +65,6 @@ function inicializarBaseDatos() {
             FOREIGN KEY(cliente_id) REFERENCES clientes(id)
         )`);
 
-        // Items de la Orden
         db.run(`CREATE TABLE IF NOT EXISTS orden_items (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             orden_id INTEGER,
@@ -76,7 +77,6 @@ function inicializarBaseDatos() {
             FOREIGN KEY(servicio_id) REFERENCES servicios(id)
         )`);
 
-        // Caja y Turnos
         db.run(`CREATE TABLE IF NOT EXISTS caja_turnos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             monto_apertura REAL NOT NULL,
@@ -88,18 +88,16 @@ function inicializarBaseDatos() {
             estado TEXT DEFAULT 'ABIERTA'
         )`);
 
-        // Movimientos de Caja (Ingresos/Egresos)
         db.run(`CREATE TABLE IF NOT EXISTS caja_movimientos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             turno_id INTEGER,
-            tipo TEXT, -- INGRESO, EGRESO, ABONO
+            tipo TEXT,
             monto REAL NOT NULL,
             concepto TEXT,
             fecha DATETIME DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY(turno_id) REFERENCES caja_turnos(id)
         )`);
 
-        // Inventario de Insumos
         db.run(`CREATE TABLE IF NOT EXISTS insumos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             nombre TEXT NOT NULL,
@@ -108,11 +106,10 @@ function inicializarBaseDatos() {
             stock_minimo REAL DEFAULT 5
         )`);
 
-        // Movimientos de Insumos
         db.run(`CREATE TABLE IF NOT EXISTS insumo_movimientos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             insumo_id INTEGER,
-            tipo TEXT, -- ENTRADA_COMPRA, SALIDA_CONSUMO
+            tipo TEXT,
             cantidad REAL NOT NULL,
             motivo TEXT,
             fecha DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -121,7 +118,7 @@ function inicializarBaseDatos() {
     });
 }
 
-// ================= API DE CLIENTES =================
+// API Clientes
 app.get('/api/clientes', (req, res) => {
     db.all(`SELECT * FROM clientes ORDER BY id DESC`, [], (err, rows) => {
         if (err) return res.status(500).json({ status: 'error', message: err.message });
@@ -149,7 +146,7 @@ app.delete('/api/clientes/:id', (req, res) => {
     });
 });
 
-// ================= API DE SERVICIOS Y TARIFAS =================
+// API Servicios
 app.get('/api/ordenes/servicios', (req, res) => {
     const admin = req.query.admin;
     let query = `SELECT * FROM servicios`;
@@ -183,14 +180,13 @@ app.put('/api/ordenes/servicios/:id', (req, res) => {
 
 app.delete('/api/ordenes/servicios/:id', (req, res) => {
     const { id } = req.params;
-    // En lugar de borrar físicamente si ya se usó, se puede desactivar o borrar
     db.run(`UPDATE servicios SET activo = 0 WHERE id = ?`, [id], function(err) {
         if (err) return res.status(500).json({ status: 'error', message: err.message });
         res.json({ status: 'success', message: 'Servicio desactivado para proteger el historial histórico.' });
     });
 });
 
-// ================= API DE ORDENES / PEDIDOS =================
+// API Órdenes
 app.get('/api/ordenes', (req, res) => {
     const query = `
         SELECT o.*, c.nombre_completo as cliente_nombre, c.telefono as cliente_telefono 
@@ -235,7 +231,6 @@ app.post('/api/ordenes', (req, res) => {
             });
             stmt.finalize();
 
-            // Si hay abono inicial, registrar ingreso en caja si está abierta
             if (abonoNum > 0) {
                 db.get(`SELECT id FROM caja_turnos WHERE estado = 'ABIERTA' ORDER BY id DESC LIMIT 1`, [], (err, turno) => {
                     if (turno) {
@@ -309,7 +304,7 @@ app.delete('/api/ordenes/:id', (req, res) => {
     });
 });
 
-// ================= WHATSAPP NOTIFICACIONES (DOS MENSAJES: RECIBIDO Y RECOGER) =================
+// WhatsApp Notificaciones (Dos mensajes diferenciados)
 app.get('/api/ordenes/:id/whatsapp', (req, res) => {
     const { id } = req.params;
     const query = `
@@ -325,12 +320,9 @@ app.get('/api/ordenes/:id/whatsapp', (req, res) => {
         let telefonoLimpio = orden.cliente_telefono.replace(/\D/g, '');
         let mensaje = '';
 
-        // DIFERENCIAR MENSAJE SEGÚN EL ESTADO DE LA ORDEN
         if (orden.estado === 'Listo para Entrega' || orden.estado === 'Entregado') {
-            // MENSAJE DE RECOGER
             mensaje = `Hola ${orden.cliente_nombre}, le saludamos de Lavandería Lavatex. Su orden ${orden.codigo_orden} ya está lista. Ya puede pasar a recoger sus prendas. Total pendiente: $${Number(orden.saldo).toLocaleString('es-CO')} COP. ¡Lo esperamos!`;
         } else {
-            // MENSAJE DE RECIBIDO
             mensaje = `Hola ${orden.cliente_nombre}, le saludamos de Lavandería Lavatex. Hemos recibido su orden ${orden.codigo_orden} por un total de $${Number(orden.total).toLocaleString('es-CO')} COP. ¡Gracias por su preferencia!`;
         }
 
@@ -339,7 +331,7 @@ app.get('/api/ordenes/:id/whatsapp', (req, res) => {
     });
 });
 
-// ================= API TICKET =================
+// Ticket
 app.get('/api/caja/ticket/:id', (req, res) => {
     const { id } = req.params;
     const qOrden = `
@@ -358,7 +350,7 @@ app.get('/api/caja/ticket/:id', (req, res) => {
     });
 });
 
-// ================= API CAJA Y FINANZAS =================
+// Caja y Finanzas
 app.get('/api/caja/estado', (req, res) => {
     db.get(`SELECT * FROM caja_turnos WHERE estado = 'ABIERTA' ORDER BY id DESC LIMIT 1`, [], (err, turno) => {
         if (err) return res.status(500).json({ status: 'error', message: err.message });
@@ -421,7 +413,7 @@ app.post('/api/caja/cerrar', (req, res) => {
     });
 });
 
-// ================= API REPORTES DE VENTAS =================
+// Reportes
 app.get('/api/caja/reporte-ventas', (req, res) => {
     const { fecha_inicio, fecha_fin } = req.query;
     let whereClause = `WHERE 1=1`;
@@ -442,7 +434,6 @@ app.get('/api/caja/reporte-ventas', (req, res) => {
         let totalAbonosPedidos = ordenes.reduce((acc, o) => acc + o.abono, 0);
         let totalSaldosPendientes = ordenes.reduce((acc, o) => acc + o.saldo, 0);
 
-        // Desglose por servicio
         const qServicios = `
             SELECT s.nombre as servicio_nombre, SUM(oi.cantidad) as cantidad_total, SUM(oi.subtotal_item) as recaudado
             FROM orden_items oi
@@ -470,7 +461,7 @@ app.get('/api/caja/reporte-ventas', (req, res) => {
     });
 });
 
-// ================= API INVENTARIO DE INSUMOS =================
+// Inventario
 app.get('/api/inventario/insumos', (req, res) => {
     db.all(`SELECT * FROM insumos ORDER BY nombre ASC`, [], (err, rows) => {
         if (err) return res.status(500).json({ status: 'error', message: err.message });
@@ -495,7 +486,6 @@ app.post('/api/inventario/movimiento', (req, res) => {
     });
 });
 
-// Iniciar Servidor
 app.listen(PORT, () => {
     console.log(`Servidor POS Lavatex corriendo en el puerto ${PORT}`);
 });

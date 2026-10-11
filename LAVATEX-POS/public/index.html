@@ -42,7 +42,6 @@
         .form-control { width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; outline: none; }
         .form-control:focus { border-color: var(--primary); }
         
-        /* Estilos para el buscador tipo Google (dropdown flotante) */
         .dropdown-suggestions {
             position: absolute; top: 100%; left: 0; right: 0; background: white;
             border: 1px solid var(--border); border-radius: 0 0 6px 6px; max-height: 200px;
@@ -148,7 +147,6 @@
                     <h2>Nueva Orden / Mostrador</h2>
                     <div id="formAlertOrden" class="alert"></div>
                     <form id="orderForm" onsubmit="crearOrden(event)">
-                        <!-- Buscador Cliente Estilo Google -->
                         <div class="form-group">
                             <label>Buscar Cliente por Cédula o Nombre *</label>
                             <input type="text" id="inputBuscarCliente" class="form-control" placeholder="Escriba cédula o nombre..." oninput="onInputBuscarCliente()" autocomplete="off">
@@ -157,7 +155,6 @@
                             <div id="clienteSeleccionadoInfo" style="margin-top: 6px; font-size: 13px; font-weight: bold; color: var(--primary);"></div>
                         </div>
 
-                        <!-- Buscador Servicio Estilo Google -->
                         <div class="form-group">
                             <label>Buscar y Agregar Servicio (Código o nombre) *</label>
                             <input type="text" id="inputBuscarServicio" class="form-control" placeholder="Escriba código ej. PH o servicio..." oninput="onInputBuscarServicio()" autocomplete="off">
@@ -519,7 +516,6 @@
             cargarTablaOrdenesRecientes();
         }
 
-        // --- BUSCADOR ESTILO GOOGLE PARA CLIENTES ---
         function onInputBuscarCliente() {
             const query = document.getElementById('inputBuscarCliente').value.toLowerCase().trim();
             const dropdown = document.getElementById('dropdownClientes');
@@ -550,7 +546,6 @@
             document.getElementById('clienteSeleccionadoInfo').innerText = `Cliente Seleccionado: ${nombre} (${tel})`;
         }
 
-        // --- BUSCADOR ESTILO GOOGLE PARA SERVICIOS ---
         function onInputBuscarServicio() {
             const query = document.getElementById('inputBuscarServicio').value.toLowerCase().trim();
             const dropdown = document.getElementById('dropdownServicios');
@@ -835,7 +830,6 @@
 
         function cerrarTicket() { document.getElementById('modalTicket').style.display = 'none'; }
 
-        // --- MÓDULO ADMINISTRACIÓN DE SERVICIOS ---
         async function cargarServiciosAdmin() {
             const res = await fetch('/api/ordenes/servicios?admin=true');
             const result = await res.json();
