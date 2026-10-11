@@ -3,17 +3,16 @@ const path = require('path');
 
 let db;
 
-// Verificamos si estamos usando Turso en la nube o SQLite local
 if (process.env.TURSO_DATABASE_URL) {
-    // Configuración optimizada para Turso en la nube vía HTTP (evita errores nativos)
+    // Forzamos el uso del cliente remoto HTTP de Turso sin dependencias nativas de C++
     const { createClient } = require('@libsql/client');
     db = createClient({
         url: process.env.TURSO_DATABASE_URL,
         authToken: process.env.TURSO_AUTH_TOKEN,
     });
-    console.log('Conectado exitosamente a Turso en la nube (Modo HTTP).');
+    console.log('Conectado a Turso en la nube mediante protocolo remoto HTTP.');
 } else {
-    // Configuración local (SQLite tradicional)
+    // Entorno local con SQLite tradicional
     const dbPath = path.resolve(__dirname, '../../lavatex_pos.db');
     db = new sqlite3.Database(dbPath, (err) => {
         if (err) {
