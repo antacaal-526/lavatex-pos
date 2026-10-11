@@ -10,17 +10,17 @@ const PORT = process.env.PORT || 3000;
 app.use(express.json());
 app.use(cors());
 
-// Configurar carpeta estática de forma flexible para Render
+// Configurar carpeta estática (Busca la carpeta 'public' en la raíz del proyecto)
 const publicPath = path.join(__dirname, 'public');
 app.use(express.static(publicPath));
 
-// Ruta raíz explícita
+// Ruta raíz explícita para evitar "Cannot GET /" o "Not Found"
 app.get('/', (req, res) => {
     res.sendFile(path.join(publicPath, 'index.html'));
 });
 
 // Base de datos SQLite
-dbPath = path.resolve(__dirname, '../lavatex.db');
+const dbPath = path.resolve(__dirname, 'lavatex_pos.db');
 const db = new sqlite3.Database(dbPath, (err) => {
     if (err) {
         console.error('Error al conectar con la base de datos SQLite:', err.message);
