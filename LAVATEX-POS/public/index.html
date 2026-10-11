@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>LAVATEX POS - Sistema de Lavandería</title>
-    <!-- Importamos una fuente estilo plantilla robusta y bold para el título del logo -->
+    <!-- Importamos la fuente Archivo Black para el logotipo exacto -->
     <link href="https://fonts.googleapis.com/css2?family=Archivo+Black&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -97,7 +97,7 @@
         .resumen-row { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 15px; }
         .resumen-row.total { font-weight: bold; font-size: 18px; color: var(--primary); border-top: 1px solid var(--border); padding-top: 8px; }
 
-        /* ESTILO EXCLUSIVO PARA EL LOGO DEL TICKET IGUAL A LA FOTO */
+        /* ESTILO EXCLUSIVO LOGO TICKET */
         .ticket-logo-container {
             text-align: center;
             margin-bottom: 5px;
@@ -107,7 +107,7 @@
             font-family: 'Archivo Black', sans-serif;
             font-size: 18px;
             font-weight: 900;
-            color: #166534; /* Verde oscuro idéntico al de tu foto */
+            color: #166534;
             letter-spacing: -0.5px;
             text-transform: uppercase;
         }
@@ -471,7 +471,7 @@
 
     </div>
 
-    <!-- MODAL VISTA PREVIA TICKET CON LOGO TIPOGRÁFICO EXACTO Y HORA ACTUAL -->
+    <!-- MODAL TICKET -->
     <div id="modalTicket">
         <div class="ticket-box">
             <div class="ticket-logo-container">
@@ -1094,8 +1094,8 @@
                 const t = result.ticket;
                 document.getElementById('t_codigo').innerText = `Recibo N° ${t.orden.codigo_orden}`;
                 
-                // Mostrar la fecha y hora exacta actual del sistema (momento de visualización/impresión)
-                const fechaActualExacta = new Date().toLocaleString('es-CO', {
+                // Mantiene fija la fecha y hora original en la que se generó la orden por primera vez
+                const fechaOriginal = new Date(t.orden.fecha_recepcion).toLocaleString('es-CO', {
                     year: 'numeric',
                     month: '2-digit',
                     day: '2-digit',
@@ -1104,7 +1104,7 @@
                     second: '2-digit',
                     hour12: true
                 });
-                document.getElementById('t_fecha').innerText = fechaActualExacta;
+                document.getElementById('t_fecha').innerText = fechaOriginal;
 
                 document.getElementById('t_cliente').innerText = `Cliente: ${t.orden.cliente_nombre || 'General'}\nCédula: ${t.orden.cliente_cedula || 'N/A'}\nTel: ${t.orden.cliente_telefono || 'N/A'}`;
                 document.getElementById('t_items').innerHTML = t.items.map(i => `<p>${i.cantidad}x ${i.servicio_nombre}${i.observacion_prenda ? ' ('+i.observacion_prenda+')' : ''} = $${formatoMoneda(i.subtotal_item)} COP</p>`).join('');
