@@ -46,6 +46,8 @@
         .btn:hover { background-color: var(--primary-dark); }
         .btn-wa { background-color: #25d366; color: white; border: none; padding: 6px 10px; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 12px; }
         .btn-wa:hover { background-color: #1ebc57; }
+        .btn-danger { background-color: #dc2626; color: white; border: none; padding: 6px 10px; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 12px; }
+        .btn-danger:hover { background-color: #b91c1c; }
 
         .table-container { overflow-x: auto; }
         table { width: 100%; border-collapse: collapse; font-size: 14px; }
@@ -110,7 +112,7 @@
                     <form id="clientForm" onsubmit="registrarCliente(event)">
                         <div class="form-group"><label>Nombre Completo *</label><input type="text" id="nombre_completo" class="form-control" required placeholder="Ej. Juan Pérez"></div>
                         <div class="form-group"><label>Teléfono / Celular *</label><input type="text" id="telefono" class="form-control" required placeholder="Ej. 3101234567"></div>
-                        <div class="form-group"><label>Cédula / NIT</label><input type="text" id="numero_identificacion" class="form-control" placeholder="Opcional"></div>
+                        <div class="form-group"><label>Cédula / NIT *</label><input type="text" id="numero_identificacion" class="form-control" required placeholder="Número de cédula"></div>
                         <div class="form-group"><label>Dirección y Barrio</label><input type="text" id="direccion" class="form-control" placeholder="Ej. Calle 15 # 7-20"></div>
                         <div class="form-group"><label>Correo Electrónico</label><input type="email" id="correo" class="form-control" placeholder="correo@mail.com"></div>
                         <button type="submit" class="btn">Guardar Cliente</button>
@@ -118,11 +120,11 @@
                 </div>
                 <div class="card">
                     <h2>Clientes Registrados</h2>
-                    <div class="form-group"><input type="text" id="searchInput" class="form-control" placeholder="Buscar cliente..." onkeyup="filtrarClientes()"></div>
+                    <div class="form-group"><input type="text" id="searchInput" class="form-control" placeholder="Buscar por nombre, teléfono o cédula..." onkeyup="filtrarClientes()"></div>
                     <div class="table-container">
                         <table>
-                            <thead><tr><th>Nombre</th><th>Teléfono</th><th>Dirección</th></tr></thead>
-                            <tbody id="clientsTableBody"><tr><td colspan="3" style="text-align: center;">Cargando...</td></tr></tbody>
+                            <thead><tr><th>Nombre</th><th>Cédula</th><th>Teléfono</th><th>Dirección</th></tr></thead>
+                            <tbody id="clientsTableBody"><tr><td colspan="4" style="text-align: center;">Cargando...</td></tr></tbody>
                         </table>
                     </div>
                 </div>
@@ -137,7 +139,8 @@
                     <div id="formAlertOrden" class="alert"></div>
                     <form id="orderForm" onsubmit="crearOrden(event)">
                         <div class="form-group">
-                            <label>Seleccionar Cliente *</label>
+                            <label>Buscar / Seleccionar Cliente (por Cédula o Nombre) *</label>
+                            <input type="text" id="filtroBuscarCliente" class="form-control" placeholder="Escriba cédula o nombre para filtrar..." onkeyup="filtrarClientesOrden()" style="margin-bottom: 8px;">
                             <select id="selectCliente" class="form-control" required><option value="">-- Seleccione cliente --</option></select>
                         </div>
                         <div class="form-group">
@@ -154,6 +157,7 @@
 
                         <div class="form-group"><label>Descuento ($ COP)</label><input type="number" id="descuentoOrden" value="0" min="0" class="form-control" onchange="calcularTotalesOrden()"></div>
                         <div class="form-group"><label>Abono Inicial ($ COP)</label><input type="number" id="abonoOrden" value="0" min="0" class="form-control" onchange="calcularTotalesOrden()"></div>
+                        <div class="form-group"><label>Fecha y Hora Estimada de Entrega (Calendario)</label><input type="datetime-local" id="fechaEntregaOrden" class="form-control"></div>
                         <div class="form-group"><label>Observaciones</label><input type="text" id="observacionesOrden" class="form-control" placeholder="Ej. Entregar doblado"></div>
 
                         <div class="resumen-caja">
@@ -390,6 +394,10 @@
     <script>
         let clientesCache = [], serviciosCache = [], ordenesCache = [], itemsOrdenActual = [], insumosCache = [], serviciosAdminCache = [];
 
+        function formatoMoneda(valor) {
+            return Number(valor || 0).toLocaleString('es-CO');
+        }
+
         function cambiarVista(vista, elemento) {
             document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
             document.querySelectorAll('.section-view').forEach(el => el.classList.remove('active'));
@@ -432,8 +440,8 @@
 
         function renderizarTablaClientes(clientes) {
             const tbody = document.getElementById('clientsTableBody');
-            if (clientes.length === 0) { tbody.innerHTML = `<tr><td colspan="3" style="text-align: center;">No hay clientes.</td></tr>`; return; }
-            tbody.innerHTML = clientes.map(c => `<tr><td><strong>${c.nombre_completo}</strong></td><td>${c.telefono}</td><td>${c.direccion || 'N/A'}</td></tr>`).join('');
+            if (clientes.length === 0) { tbody.innerHTML = `<tr><td colspan="4" style="text-align: center;">No hay clientes.</td></tr>`; return; }
+            tbody.innerHTML = clientes.map(c => `<tr><td><strong>${c.nombre_completo}</strong></td><td>${c.numero_identificacion || 'N/A'}</td><td>${c.telefono}</td><td>${c.direccion || 'N/A'}</td></tr>`).join('');
         }
 
         async function registrarCliente(e) {
@@ -455,7 +463,7 @@
 
         function filtrarClientes() {
             const texto = document.getElementById('searchInput').value.toLowerCase();
-            const filtrados = clientesCache.filter(c => c.nombre_completo.toLowerCase().includes(texto) || c.telefono.includes(texto));
+            const filtrados = clientesCache.filter(c => c.nombre_completo.toLowerCase().includes(texto) || c.telefono.includes(texto) || (c.numero_identificacion && c.numero_identificacion.toLowerCase().includes(texto)));
             renderizarTablaClientes(filtrados);
         }
 
@@ -463,16 +471,33 @@
             const resC = await fetch('/api/clientes');
             const rC = await resC.json();
             if(rC.status === 'success') {
-                document.getElementById('selectCliente').innerHTML = `<option value="">-- Seleccione cliente --</option>` + rC.data.map(c => `<option value="${c.id}">${c.nombre_completo} (${c.telefono})</option>`).join('');
+                clientesCache = rC.data;
+                actualizarSelectClientes(clientesCache);
             }
 
             const resS = await fetch('/api/ordenes/servicios');
             const rS = await resS.json();
             if(rS.status === 'success') {
                 serviciosCache = rS.data;
-                document.getElementById('selectServicio').innerHTML = `<option value="">-- Agregar servicio --</option>` + serviciosCache.map(s => `<option value="${s.id}">${s.nombre} - $${s.precio.toLocaleString()} COP</option>`).join('');
+                document.getElementById('selectServicio').innerHTML = `<option value="">-- Agregar servicio --</option>` + serviciosCache.map(s => `<option value="${s.id}">${s.nombre} - $${formatoMoneda(s.precio)} COP</option>`).join('');
             }
+            
+            // Fijar fecha por defecto a 24 horas después en el calendario
+            const maniana = new Date();
+            maniana.setHours(maniana.getHours() + 24);
+            document.getElementById('fechaEntregaOrden').value = maniana.toISOString().slice(0, 16);
+
             cargarTablaOrdenesRecientes();
+        }
+
+        function actualizarSelectClientes(clientes) {
+            document.getElementById('selectCliente').innerHTML = `<option value="">-- Seleccione cliente --</option>` + clientes.map(c => `<option value="${c.id}">${c.nombre_completo} - Cédula: ${c.numero_identificacion || 'S/N'} (${c.telefono})</option>`).join('');
+        }
+
+        function filtrarClientesOrden() {
+            const filtro = document.getElementById('filtroBuscarCliente').value.toLowerCase();
+            const filtrados = clientesCache.filter(c => (c.numero_identificacion && c.numero_identificacion.toLowerCase().includes(filtro)) || c.nombre_completo.toLowerCase().includes(filtro) || c.telefono.includes(filtro));
+            actualizarSelectClientes(filtrados);
         }
 
         function agregarItemOrden() {
@@ -496,7 +521,7 @@
             const tbody = document.getElementById('itemsOrdenBody');
             if(itemsOrdenActual.length === 0) { tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--text-muted);">Sin servicios agregados</td></tr>`; calcularTotalesOrden(); return; }
             tbody.innerHTML = itemsOrdenActual.map((item, index) => `
-                <tr><td>${item.nombre}</td><td>${item.cantidad}</td><td>$${(item.cantidad * item.precio_unitario).toLocaleString()}</td>
+                <tr><td>${item.nombre}</td><td>${item.cantidad}</td><td>$${formatoMoneda(item.cantidad * item.precio_unitario)}</td>
                 <td><button type="button" onclick="eliminarItemOrden(${index})" style="background:#dc2626; color:white; border:none; padding:4px 8px; border-radius:4px; cursor:pointer;">X</button></td></tr>
             `).join('');
             calcularTotalesOrden();
@@ -509,11 +534,11 @@
             let abono = parseFloat(document.getElementById('abonoOrden').value) || 0;
             let saldo = Math.max(0, total - abono);
 
-            document.getElementById('lblSubtotal').innerText = `$${subtotal.toLocaleString()} COP`;
-            document.getElementById('lblDescuento').innerText = `$${descuento.toLocaleString()} COP`;
-            document.getElementById('lblTotal').innerText = `$${total.toLocaleString()} COP`;
-            document.getElementById('lblAbono').innerText = `$${abono.toLocaleString()} COP`;
-            document.getElementById('lblSaldo').innerText = `$${saldo.toLocaleString()} COP`;
+            document.getElementById('lblSubtotal').innerText = `$${formatoMoneda(subtotal)} COP`;
+            document.getElementById('lblDescuento').innerText = `$${formatoMoneda(descuento)} COP`;
+            document.getElementById('lblTotal').innerText = `$${formatoMoneda(total)} COP`;
+            document.getElementById('lblAbono').innerText = `$${formatoMoneda(abono)} COP`;
+            document.getElementById('lblSaldo').innerText = `$${formatoMoneda(saldo)} COP`;
         }
 
         async function crearOrden(e) {
@@ -526,6 +551,7 @@
                 items: itemsOrdenActual,
                 descuento: parseFloat(document.getElementById('descuentoOrden').value) || 0,
                 abono: parseFloat(document.getElementById('abonoOrden').value) || 0,
+                fecha_entrega_estimada: document.getElementById('fechaEntregaOrden').value,
                 observaciones: document.getElementById('observacionesOrden').value
             };
 
@@ -550,13 +576,25 @@
                     <tr>
                         <td><strong>${o.codigo_orden}</strong></td>
                         <td>${o.cliente_nombre || 'General'}</td>
-                        <td>$${o.total.toLocaleString()} COP</td>
+                        <td>$${formatoMoneda(o.total)} COP</td>
                         <td>
                             <button onclick="verTicket(${o.id})" style="background:#0284c7; color:white; border:none; padding:4px 8px; border-radius:4px; cursor:pointer;">🧾 Ticket</button>
                             <button onclick="enviarWhatsapp(${o.id})" class="btn-wa">📲 WA</button>
+                            <button onclick="eliminarOrden(${o.id})" class="btn-danger" style="margin-left:4px;">🗑️</button>
                         </td>
                     </tr>
                 `).join('');
+            }
+        }
+
+        async function eliminarOrden(id) {
+            if(!confirm('¿Está seguro de eliminar esta orden del sistema?')) return;
+            const res = await fetch(`/api/ordenes/${id}`, { method: 'DELETE' });
+            if(res.ok) {
+                alert('Orden eliminada con éxito.');
+                cargarTablaOrdenesRecientes();
+            } else {
+                alert('No se pudo eliminar la orden.');
             }
         }
 
@@ -592,6 +630,7 @@
                     <td>
                         <button onclick="actualizarTracking(${o.id})" style="background:#166534; color:white; border:none; padding:6px 10px; border-radius:4px; cursor:pointer; font-weight:bold;">Guardar</button>
                         <button onclick="enviarWhatsapp(${o.id})" class="btn-wa" style="margin-left:4px;">📲 Notificar</button>
+                        <button onclick="eliminarOrden(${o.id})" class="btn-danger" style="margin-left:4px;">🗑️</button>
                     </td>
                 </tr>
             `).join('');
@@ -611,7 +650,7 @@
             if(estado === 'Entregado') {
                 const orden = ordenesCache.find(o => o.id === ordenId);
                 if(orden && orden.saldo > 0) {
-                    let pagarTodo = confirm(`La orden tiene un saldo pendiente de $${orden.saldo.toLocaleString()} COP.\n¿Desea registrar el pago total de este saldo al entregar?`);
+                    let pagarTodo = confirm(`La orden tiene un saldo pendiente de $${formatoMoneda(orden.saldo)} COP.\n¿Desea registrar el pago total de este saldo al entregar?`);
                     if(pagarTodo) { abonarAdicional = orden.saldo; }
                 }
             }
@@ -648,12 +687,12 @@
                 const t = result.ticket;
                 document.getElementById('t_codigo').innerText = t.orden.codigo_orden;
                 document.getElementById('t_fecha').innerText = new Date(t.orden.fecha_recepcion).toLocaleString();
-                document.getElementById('t_cliente').innerText = `Cliente: ${t.orden.cliente_nombre || 'General'}\nTeléfono: ${t.orden.cliente_telefono || 'N/A'}`;
-                document.getElementById('t_items').innerHTML = t.items.map(i => `<p>${i.cantidad}x ${i.servicio_nombre} = $${i.subtotal_item.toLocaleString()} COP</p>`).join('');
-                document.getElementById('t_subtotal').innerText = `Subtotal: $${t.orden.subtotal.toLocaleString()} COP`;
-                document.getElementById('t_total').innerText = `TOTAL: $${t.orden.total.toLocaleString()} COP`;
-                document.getElementById('t_abono').innerText = `Abono: $${t.orden.abono.toLocaleString()} COP`;
-                document.getElementById('t_saldo').innerText = `Saldo Pendiente: $${t.orden.saldo.toLocaleString()} COP`;
+                document.getElementById('t_cliente').innerText = `Cliente: ${t.orden.cliente_nombre || 'General'}\nCédula: ${t.orden.cliente_cedula || 'N/A'}\nTel: ${t.orden.cliente_telefono || 'N/A'}`;
+                document.getElementById('t_items').innerHTML = t.items.map(i => `<p>${i.cantidad}x ${i.servicio_nombre} = $${formatoMoneda(i.subtotal_item)} COP</p>`).join('');
+                document.getElementById('t_subtotal').innerText = `Subtotal: $${formatoMoneda(t.orden.subtotal)} COP`;
+                document.getElementById('t_total').innerText = `TOTAL: $${formatoMoneda(t.orden.total)} COP`;
+                document.getElementById('t_abono').innerText = `Abono: $${formatoMoneda(t.orden.abono)} COP`;
+                document.getElementById('t_saldo').innerText = `Saldo Pendiente: $${formatoMoneda(t.orden.saldo)} COP`;
                 document.getElementById('modalTicket').style.display = 'flex';
             }
         }
@@ -670,7 +709,7 @@
                     <tr>
                         <td><strong>${s.nombre}</strong><br><small style="color:var(--text-muted);">${s.descripcion || ''}</small></td>
                         <td>${s.unidad_cobro}</td>
-                        <td><strong>$${s.precio.toLocaleString()} COP</strong></td>
+                        <td><strong>$${formatoMoneda(s.precio)} COP</strong></td>
                         <td><span style="${s.activo === 1 ? 'color:#166534; font-weight:bold;' : 'color:#dc2626; font-weight:bold;'}">${s.activo === 1 ? 'Activo' : 'Inactivo'}</span></td>
                         <td>
                             <button onclick="prepararEdicionServicio(${s.id})" style="background:#0284c7; color:white; border:none; padding:6px 10px; border-radius:4px; cursor:pointer; font-weight:bold; margin-right:4px;">Editar</button>
@@ -772,10 +811,10 @@
                 boxStatus.innerHTML = `<span style="background:#dcfce7; color:#166534; padding:8px 12px; border-radius:6px; font-weight:bold;">● CAJA ABIERTA - Turno #${result.turno.id}</span>`;
                 document.getElementById('boxAbrirCaja').style.display = 'none';
                 document.getElementById('boxCajaAbierta').style.display = 'block';
-                document.getElementById('lblMontoApertura').innerText = `$${result.resumen.montoApertura.toLocaleString()} COP`;
-                document.getElementById('lblTotalIngresos').innerText = `$${result.resumen.totalIngresos.toLocaleString()} COP`;
-                document.getElementById('lblTotalEgresos').innerText = `$${result.resumen.totalEgresos.toLocaleString()} COP`;
-                document.getElementById('lblSaldoEsperado').innerText = `$${result.resumen.saldoEsperado.toLocaleString()} COP`;
+                document.getElementById('lblMontoApertura').innerText = `$${formatoMoneda(result.resumen.montoApertura)} COP`;
+                document.getElementById('lblTotalIngresos').innerText = `$${formatoMoneda(result.resumen.totalIngresos)} COP`;
+                document.getElementById('lblTotalEgresos').innerText = `$${formatoMoneda(result.resumen.totalEgresos)} COP`;
+                document.getElementById('lblSaldoEsperado').innerText = `$${formatoMoneda(result.resumen.saldoEsperado)} COP`;
             } else {
                 boxStatus.innerHTML = `<span style="background:#fee2e2; color:#991b1b; padding:8px 12px; border-radius:6px; font-weight:bold;">● CAJA CERRADA</span>`;
                 document.getElementById('boxAbrirCaja').style.display = 'block';
@@ -805,7 +844,7 @@
             const res = await fetch('/api/caja/cerrar', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ monto_cierre_efectivo: parseFloat(monto) }) });
             const result = await res.json();
             if(res.ok) {
-                alert(`Caja cerrada con éxito.\nSaldo esperado: $${result.resumen.saldoEsperado.toLocaleString()} COP\nEfectivo contado: $${result.resumen.efectivoContado.toLocaleString()} COP\nDiferencia: $${result.resumen.diferencia.toLocaleString()} COP`);
+                alert(`Caja cerrada con éxito.\nSaldo esperado: $${formatoMoneda(result.resumen.saldoEsperado)} COP\nEfectivo contado: $${formatoMoneda(result.resumen.efectivoContado)} COP\nDiferencia: $${formatoMoneda(result.resumen.diferencia)} COP`);
                 cargarEstadoCaja();
             }
         }
@@ -857,12 +896,12 @@
             if(result.status === 'success') {
                 const r = result.resumen;
                 document.getElementById('repTotalPedidos').innerText = r.totalPedidos;
-                document.getElementById('repSubtotal').innerText = `$${r.totalSubtotal.toLocaleString()} COP`;
-                document.getElementById('repDescuentos').innerText = `-$${r.totalDescuentos.toLocaleString()} COP`;
-                document.getElementById('repTotalVendido').innerText = `$${r.totalVendido.toLocaleString()} COP`;
-                document.getElementById('repAbonos').innerText = `$${r.totalAbonosPedidos.toLocaleString()} COP`;
-                document.getElementById('repDineroCaja').innerText = `$${r.dineroRecibidoCaja.toLocaleString()} COP`;
-                document.getElementById('repSaldosPendientes').innerText = `$${r.totalSaldosPendientes.toLocaleString()} COP`;
+                document.getElementById('repSubtotal').innerText = `$${formatoMoneda(r.totalSubtotal)} COP`;
+                document.getElementById('repDescuentos').innerText = `-$${formatoMoneda(r.totalDescuentos)} COP`;
+                document.getElementById('repTotalVendido').innerText = `$${formatoMoneda(r.totalVendido)} COP`;
+                document.getElementById('repAbonos').innerText = `$${formatoMoneda(r.totalAbonosPedidos)} COP`;
+                document.getElementById('repDineroCaja').innerText = `$${formatoMoneda(r.dineroRecibidoCaja)} COP`;
+                document.getElementById('repSaldosPendientes').innerText = `$${formatoMoneda(r.totalSaldosPendientes)} COP`;
 
                 const tbody = document.getElementById('repTopServiciosBody');
                 if(result.porServicio.length === 0) {
@@ -873,7 +912,7 @@
                     <tr>
                         <td><strong>${s.servicio_nombre}</strong></td>
                         <td>${s.cantidad_total}</td>
-                        <td>$${s.recaudado.toLocaleString()} COP</td>
+                        <td>$${formatoMoneda(s.recaudado)} COP</td>
                     </tr>
                 `).join('');
             }
