@@ -886,7 +886,7 @@
         }
 
         async function eliminarServicio(id) {
-            if(!confirm('¿Estás seguro de eliminar este servicio?\n(Simula si ya ha sido usado en pedidos anteriores, el sistema lo desactivará automáticamente para proteger el historial).')) return;
+            if(!confirm('¿Estás seguro de eliminar este servicio?\n(Si ya ha sido usado en pedidos anteriores, el sistema lo desactivará automáticamente para proteger el historial).')) return;
 
             const res = await fetch(`/api/ordenes/servicios/${id}`, { method: 'DELETE' });
             const result = await res.json();
