@@ -599,11 +599,12 @@
             renderizarItemsOrden();
         }
 
-        function actualizarSubtotalItem(index, nuevoValor) {
+        function actualizarPrecioUnitarioItem(index, nuevoValor) {
             let val = parseFloat(nuevoValor);
             if(isNaN(val) || val < 0) val = 0;
-            itemsOrdenActual[index].subtotal_item = val;
-            calcularTotalesOrden();
+            itemsOrdenActual[index].precio_unitario = val;
+            itemsOrdenActual[index].subtotal_item = itemsOrdenActual[index].cantidad * val;
+            renderizarItemsOrden();
         }
 
         function eliminarItemOrden(index) { itemsOrdenActual.splice(index, 1); renderizarItemsOrden(); }
@@ -616,8 +617,8 @@
                     <td><strong>${item.nombre}</strong>${item.observacion_prenda ? `<br><small style="color:var(--text-muted);">Detalle: ${item.observacion_prenda}</small>` : ''}</td>
                     <td>${item.cantidad}</td>
                     <td>
-                        <input type="number" class="form-control" value="${item.subtotal_item}" min="0" onchange="actualizarSubtotalItem(${index}, this.value)" style="padding:4px; width:110px;">
-                        <br><small style="color: var(--text-muted);">($${formatoMoneda(item.precio_unitario)} c/u)</small>
+                        <strong>$${formatoMoneda(item.subtotal_item)}</strong>
+                        <br><small style="color: var(--text-muted);">($ <input type="number" class="form-control" value="${item.precio_unitario}" min="0" onchange="actualizarPrecioUnitarioItem(${index}, this.value)" style="padding:2px 6px; width:90px; display:inline-block; font-size:12px;"> c/u)</small>
                     </td>
                     <td><button type="button" onclick="eliminarItemOrden(${index})" style="background:#dc2626; color:white; border:none; padding:4px 8px; border-radius:4px; cursor:pointer;">X</button></td>
                 </tr>
