@@ -1,5 +1,5 @@
 const express = require('express');
-const sqlite3 = sqlite3.verbose();
+const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 const cors = require('cors');
 
@@ -230,10 +230,9 @@ app.post('/api/ordenes', (req, res) => {
     let obsGenerales = observaciones || observations || '';
 
     db.serialize(() => {
-        // Obtener el último ID registrado para calcular el consecutivo 0001
         db.get(`SELECT MAX(id) as max_id FROM ordenes`, [], (err, row) => {
             let nextId = (row && row.max_id) ? row.max_id + 1 : 1;
-            let codigoOrden = String(nextId).padStart(4, '0'); // Ej: 0001, 0002...
+            let codigoOrden = String(nextId).padStart(4, '0');
 
             const queryOrden = `INSERT INTO ordenes (codigo_orden, cliente_id, total, abono, saldo, fecha_entrega_estimada, estado, ubicacion_fisica, observaciones) VALUES (?, ?, ?, ?, ?, ?, 'Recibido', 'Estantería Principal', ?)`;
             
