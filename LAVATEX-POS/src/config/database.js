@@ -1,5 +1,5 @@
 const sqlite3 = require('sqlite3').verbose();
-const path = path = require('path');
+const path = require('path');
 
 let db;
 
