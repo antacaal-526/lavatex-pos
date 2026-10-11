@@ -1,16 +1,28 @@
 const express = require('express');
 const router = express.Router();
-const orderController = require('../controllers/orderController');
+const {
+    obtenerServicios,
+    crearServicio,
+    actualizarServicio,
+    eliminarServicio,
+    obtenerOrdenes,
+    crearOrden,
+    eliminarOrden,
+    actualizarEstadoOrden,
+    obtenerMensajeWhatsapp
+} = require('../controllers/orderController');
 
-router.get('/servicios', orderController.obtenerServicios);
-router.post('/servicios', orderController.crearServicio);
-router.put('/servicios/:id', orderController.actualizarServicio);
-router.delete('/servicios/:id', orderController.eliminarServicio);
+// Rutas de Servicios y Tarifas
+router.get('/servicios', obtenerServicios);
+router.post('/servicios', crearServicio);
+router.put('/servicios/:id', actualizarServicio);
+router.delete('/servicios/:id', eliminarServicio);
 
-router.get('/', orderController.obtenerOrdenes);
-router.post('/', orderController.crearOrden);
-router.delete('/:id', orderController.eliminarOrden); // Ruta añadida para eliminar órdenes
-router.put('/:id/estado', orderController.actualizarEstadoOrden);
-router.get('/:id/whatsapp', orderController.obtenerMensajeWhatsapp);
+// Rutas de Órdenes
+router.get('/', obtenerOrdenes);
+router.post('/', crearOrden);
+router.delete('/:id', eliminarOrden);
+router.put('/:id/estado', actualizarEstadoOrden);
+router.get('/:id/whatsapp', obtenerMensajeWhatsapp);
 
 module.exports = router;
