@@ -9,15 +9,18 @@ const PORT = process.env.PORT || 3000;
 // Middleware
 app.use(express.json());
 app.use(cors());
-app.use(express.static(path.join(__dirname, 'public')));
 
-// Ruta raíz explícita para evitar "Cannot GET /"
+// Configurar carpeta estática de forma flexible para Render
+const publicPath = path.join(__dirname, 'public');
+app.use(express.static(publicPath));
+
+// Ruta raíz explícita
 app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+    res.sendFile(path.join(publicPath, 'index.html'));
 });
 
 // Base de datos SQLite
-const dbPath = path.resolve(__dirname, 'lavatex.db');
+dbPath = path.resolve(__dirname, '../lavatex.db');
 const db = new sqlite3.Database(dbPath, (err) => {
     if (err) {
         console.error('Error al conectar con la base de datos SQLite:', err.message);
