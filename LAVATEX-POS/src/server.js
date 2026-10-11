@@ -52,7 +52,6 @@ function inicializarBaseDatos() {
             tiempo_estimado_horas INTEGER DEFAULT 24,
             activo INTEGER DEFAULT 1
         )`, () => {
-            // Verificar si hay servicios precargados, si no, agregarlos como ejemplo
             db.get(`SELECT COUNT(*) as count FROM servicios`, [], (err, row) => {
                 if (row && row.count === 0) {
                     const serviciosIniciales = [
@@ -323,7 +322,7 @@ app.delete('/api/ordenes/:id', (req, res) => {
     });
 });
 
-// WhatsApp Notificaciones (Ambos mensajes con detalle completo de prendas)
+// WhatsApp Notificaciones (Distinción correcta entre Orden Recibida y Pedido Listo para Recoger)
 app.get('/api/ordenes/:id/whatsapp', (req, res) => {
     const { id } = req.params;
     const qOrden = `
@@ -341,7 +340,6 @@ app.get('/api/ordenes/:id/whatsapp', (req, res) => {
 
             let telefonoLimpio = orden.cliente_telefono.replace(/\D/g, '');
             
-            // Construir el detalle de prendas con sus observaciones
             let detallePrendas = items.map(i => {
                 let desc = `- ${i.cantidad} ${i.servicio_nombre}`;
                 if (i.observacion_prenda && i.observacion_prenda.trim() !== '') {
@@ -351,9 +349,11 @@ app.get('/api/ordenes/:id/whatsapp', (req, res) => {
             }).join('\n');
 
             let mensaje = '';
+            let estadoActual = (orden.estado || '').trim().toLowerCase();
 
-            if (orden.estado === 'Listo para Entrega' || orden.estado === 'Entregado') {
-                mensaje = `🧺 LAVANDERÍA LAVATEX\n\n¡Hola ${orden.cliente_nombre}! Su orden *${orden.codigo_orden}* ya está lista para recoger.\n\n📋 Detalle:\n${detallePrendas}\n\n💰 Total: $${Number(orden.total).toLocaleString('es-CO')} COP\n💵 Abono: $${Number(orden.abono).toLocaleString('es-CO')} COP\n🔴 Saldo Pendiente: $${Number(orden.saldo).toLocaleString('es-CO')} COP\n\n¡Lo esperamos!`;
+            // Validar si está listo para entrega o entregado
+            if (estadoActual === 'listo para entrega' || estadoActual === 'entregado') {
+                mensaje = `🧺 LAVANDERÍA LAVATEX\n\n¡Hola ${orden.cliente_nombre}! Su orden *${orden.codigo_orden}* ya está lista para recoger.\n\n📋 Detalle de prendas:\n${detallePrendas}\n\n💰 Total a Pagar: $${Number(orden.total).toLocaleString('es-CO')} COP\n💵 Abono Inicial: $${Number(orden.abono).toLocaleString('es-CO')} COP\n🔴 Saldo Pendiente: $${Number(orden.saldo).toLocaleString('es-CO')} COP\n\n¡Lo esperamos!`;
             } else {
                 mensaje = `🧺 LAVANDERÍA LAVATEX\n\n¡Hola ${orden.cliente_nombre}! Hemos recibido su pedido *${orden.codigo_orden}*.\n\n📋 Detalle de prendas:\n${detallePrendas}\n\n💰 Total a Pagar: $${Number(orden.total).toLocaleString('es-CO')} COP\n💵 Abono Inicial: $${Number(orden.abono).toLocaleString('es-CO')} COP\n🔴 Saldo Pendiente: $${Number(orden.saldo).toLocaleString('es-CO')} COP\n\n¡Gracias por su preferencia!`;
             }
