@@ -78,7 +78,7 @@ const obtenerOrdenes = (req, res) => {
     });
 };
 
-// Crear nueva orden con consecutivo diario desde 1
+// Crear nueva orden con código único seguro basado en timestamp y milisegundos
 const crearOrden = (req, res) => {
     const { cliente_id, items, descuento = 0, abono = 0, observaciones = '', fecha_entrega_estimada } = req.body;
 
@@ -86,64 +86,62 @@ const crearOrden = (req, res) => {
         return res.status(400).json({ status: 'error', message: 'Debe seleccionar un cliente y al menos un servicio.' });
     }
 
-    const fechaStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    const ahora = new Date();
+    const fechaStr = ahora.toISOString().slice(0, 10).replace(/-/g, '');
+    const timestampUnico = ahora.getTime().toString().slice(-4); // Últimos 4 dígitos del timestamp para garantizar unicidad absoluta
+    const codigo_orden = `ORD-${fechaStr}-${timestampUnico}`;
+
+    let subtotal = 0;
+    items.forEach(item => { subtotal += item.cantidad * item.precio_unitario; });
+
+    const total = Math.max(0, subtotal - parseFloat(descuento));
+    const montoAbono = parseFloat(abono) || 0;
+    const saldo = Math.max(0, total - montoAbono);
     
-    db.get(`SELECT COUNT(*) as total FROM ordenes WHERE codigo_orden LIKE ?`, [`ORD-${fechaStr}-%`], (errCount, rowCount) => {
-        const consecutivo = (rowCount ? rowCount.total : 0) + 1;
-        const codigo_orden = `ORD-${fechaStr}-${consecutivo}`;
+    let fechaEntrega = fecha_entrega_estimada ? new Date(fecha_entrega_estimada) : new Date();
+    if (!fecha_entrega_estimada) fechaEntrega.setHours(fechaEntrega.getHours() + 24);
 
-        let subtotal = 0;
-        items.forEach(item => { subtotal += item.cantidad * item.precio_unitario; });
+    db.serialize(() => {
+        db.run('BEGIN TRANSACTION');
 
-        const total = Math.max(0, subtotal - parseFloat(descuento));
-        const montoAbono = parseFloat(abono) || 0;
-        const saldo = Math.max(0, total - montoAbono);
+        const queryOrden = `INSERT INTO ordenes (codigo_orden, cliente_id, subtotal, descuento, total, abono, saldo, fecha_entrega_estimada, observaciones, estado) 
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Recibido')`;
         
-        let fechaEntrega = fecha_entrega_estimada ? new Date(fecha_entrega_estimada) : new Date();
-        if (!fecha_entrega_estimada) fechaEntrega.setHours(fechaEntrega.getHours() + 24);
+        db.run(queryOrden, [codigo_orden, cliente_id, subtotal, descuento, total, montoAbono, saldo, fechaEntrega.toISOString(), observaciones], function(err) {
+            if (err) { db.run('ROLLBACK'); return res.status(500).json({ status: 'error', message: err.message }); }
 
-        db.serialize(() => {
-            db.run('BEGIN TRANSACTION');
+            const ordenId = this.lastID;
+            const queryDetalle = `INSERT INTO detalle_orden (orden_id, servicio_id, cantidad, precio_unitario, subtotal_item, observacion_prenda) VALUES (?, ?, ?, ?, ?, ?)`;
+            const stmt = db.prepare(queryDetalle);
+            let errorOcurrido = false;
 
-            const queryOrden = `INSERT INTO ordenes (codigo_orden, cliente_id, subtotal, descuento, total, abono, saldo, fecha_entrega_estimada, observaciones, estado) 
-                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Recibido')`;
-            
-            db.run(queryOrden, [codigo_orden, cliente_id, subtotal, descuento, total, montoAbono, saldo, fechaEntrega.toISOString(), observaciones], function(err) {
-                if (err) { db.run('ROLLBACK'); return res.status(500).json({ status: 'error', message: err.message }); }
+            items.forEach(item => {
+                const subItem = item.cantidad * item.precio_unitario;
+                stmt.run([ordenId, item.servicio_id, item.cantidad, item.precio_unitario, subItem, item.observacion_prenda || ''], (e) => { if(e) errorOcurrido = true; });
+            });
 
-                const ordenId = this.lastID;
-                const queryDetalle = `INSERT INTO detalle_orden (orden_id, servicio_id, cantidad, precio_unitario, subtotal_item, observacion_prenda) VALUES (?, ?, ?, ?, ?, ?)`;
-                const stmt = db.prepare(queryDetalle);
-                let errorOcurrido = false;
+            stmt.finalize(() => {
+                if (errorOcurrido) { db.run('ROLLBACK'); return res.status(500).json({ status: 'error', message: 'Error al registrar ítems.' }); }
 
-                items.forEach(item => {
-                    const subItem = item.cantidad * item.precio_unitario;
-                    stmt.run([ordenId, item.servicio_id, item.cantidad, item.precio_unitario, subItem, item.observacion_prenda || ''], (e) => { if(e) errorOcurrido = true; });
-                });
+                if (montoAbono > 0) {
+                    db.get(`SELECT id FROM turnos_caja WHERE estado = 'ABIERTA' ORDER BY id DESC LIMIT 1`, [], (errCaja, turno) => {
+                        if (turno) {
+                            db.run(`INSERT INTO movimientos_caja (turno_id, orden_id, tipo, monto, concepto) VALUES (?, ?, 'INGRESO_ABONO', ?, ?)`,
+                                [turno.id, ordenId, montoAbono, `Abono inicial orden ${codigo_orden}`]);
+                        }
+                    });
+                }
 
-                stmt.finalize(() => {
-                    if (errorOcurrido) { db.run('ROLLBACK'); return res.status(500).json({ status: 'error', message: 'Error al registrar ítems.' }); }
+                db.run('COMMIT');
 
-                    if (montoAbono > 0) {
-                        db.get(`SELECT id FROM turnos_caja WHERE estado = 'ABIERTA' ORDER BY id DESC LIMIT 1`, [], (errCaja, turno) => {
-                            if (turno) {
-                                db.run(`INSERT INTO movimientos_caja (turno_id, orden_id, tipo, monto, concepto) VALUES (?, ?, 'INGRESO_ABONO', ?, ?)`,
-                                    [turno.id, ordenId, montoAbono, `Abono inicial orden ${codigo_orden}`]);
-                            }
-                        });
-                    }
-
-                    db.run('COMMIT');
-
-                    db.get(`SELECT o.*, c.nombre_completo as cliente_nombre, c.telefono as cliente_telefono, c.numero_identificacion as cliente_cedula, c.direccion as cliente_direccion FROM ordenes o LEFT JOIN clientes c ON o.cliente_id = c.id WHERE o.id = ?`, [ordenId], (errGet, ordenCompleta) => {
-                        db.all(`SELECT d.*, s.nombre as servicio_nombre FROM detalle_orden d LEFT JOIN servicios s ON d.servicio_id = s.id WHERE d.orden_id = ?`, [ordenId], (errDet, itemsCompletos) => {
-                            res.status(201).json({ 
-                                status: 'success', 
-                                message: 'Orden creada exitosamente.', 
-                                ordenId, 
-                                codigo_orden,
-                                orden: { ...ordenCompleta, items: itemsCompletos } 
-                            });
+                db.get(`SELECT o.*, c.nombre_completo as cliente_nombre, c.telefono as cliente_telefono, c.numero_identificacion as cliente_cedula, c.direccion as cliente_direccion FROM ordenes o LEFT JOIN clientes c ON o.cliente_id = c.id WHERE o.id = ?`, [ordenId], (errGet, ordenCompleta) => {
+                    db.all(`SELECT d.*, s.nombre as servicio_nombre FROM detalle_orden d LEFT JOIN servicios s ON d.servicio_id = s.id WHERE d.orden_id = ?`, [ordenId], (errDet, itemsCompletos) => {
+                        res.status(201).json({ 
+                            status: 'success', 
+                            message: 'Orden creada exitosamente.', 
+                            ordenId, 
+                            codigo_orden,
+                            orden: { ...ordenCompleta, items: itemsCompletos } 
                         });
                     });
                 });
