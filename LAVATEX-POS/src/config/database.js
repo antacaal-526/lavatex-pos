@@ -9,13 +9,25 @@ if (process.env.TURSO_DATABASE_URL) {
     const authToken = process.env.TURSO_AUTH_TOKEN;
 
     async function tursoQuery(sql, params = []) {
+        // Aseguramos que los parámetros se formateen correctamente para la API HTTP de Turso
+        const formattedParams = params.map(p => {
+            if (p === undefined || p === null) return { type: 'null' };
+            if (typeof p === 'number') return { type: Number.isInteger(p) ? 'integer' : 'float', value: p.toString() };
+            return { type: 'text', value: p.toString() };
+        });
+
         const response = await fetch(`${tursoUrl}v2/pipeline`, {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${authToken}`,
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ requests: [{ type: 'execute', stmt: { sql, params: params } }] })
+            body: JSON.stringify({ 
+                requests: [{ 
+                    type: 'execute', 
+                    stmt: { sql, params: formattedParams } 
+                }] 
+            })
         });
 
         if (!response.ok) {
@@ -47,7 +59,6 @@ if (process.env.TURSO_DATABASE_URL) {
         };
     }
 
-    // Función para inicializar las tablas en Turso si no existen
     async function inicializarTablasTurso() {
         const queries = [
             `CREATE TABLE IF NOT EXISTS clientes (
@@ -152,7 +163,7 @@ if (process.env.TURSO_DATABASE_URL) {
         for (let q of queries) {
             await tursoQuery(q);
         }
-        console.log('¡Tablas de Turso verificadas e inicializadas correctamente en la nube!');
+        console.log('¡Tablas de Turso verificadas con éxito!');
     }
 
     inicializarTablasTurso().catch(err => console.error('Error al inicializar tablas en Turso:', err.message));
@@ -214,7 +225,7 @@ if (process.env.TURSO_DATABASE_URL) {
             };
         }
     };
-    console.log('Adaptador Turso HTTP con auto-inicialización de esquema activo.');
+    console.log('Adaptador Turso HTTP con tipado de parámetros activo.');
 } else {
     const dbPath = path.resolve(__dirname, '../../lavatex_pos.db');
     db = new sqlite3.Database(dbPath, (err) => {
