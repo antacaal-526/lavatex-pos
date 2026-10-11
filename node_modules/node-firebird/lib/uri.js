@@ -1,0 +1,282 @@
+"use strict";
+/***************************************
+ *
+ *   Connection URI strings
+ *
+ ***************************************/
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.parseConnectionUri = parseConnectionUri;
+exports.parseOldStyleConnectionString = parseOldStyleConnectionString;
+exports.parseConnectionString = parseConnectionString;
+exports.normalizeOptions = normalizeOptions;
+/**
+ * Option keys coerced to boolean when they arrive as URI query parameters.
+ * "1"/"true"/"yes"/"on" (case-insensitive) → true, everything else → false.
+ */
+const BOOLEAN_KEYS = new Set([
+    'lowercase_keys', 'blobAsText', 'wireCompression', 'manager',
+    'namedPlaceholders', 'enableKeepAlive', 'eventBaseline',
+]);
+/** Option keys coerced to number when they arrive as URI query parameters. */
+const NUMBER_KEYS = new Set([
+    'port', 'pageSize', 'timeout', 'retryConnectionInterval',
+    'blobChunkSize', 'blobReadChunkSize', 'wireCrypt', 'parallelWorkers',
+    'maxInlineBlobSize', 'maxNegotiatedProtocols', 'connectTimeout',
+    'min', 'idleTimeoutMillis', 'keepAliveInitialDelay', 'ipFamily',
+]);
+function coerce(key, value) {
+    if (BOOLEAN_KEYS.has(key)) {
+        return /^(1|true|yes|on)$/i.test(value);
+    }
+    if (NUMBER_KEYS.has(key)) {
+        var n = Number(value);
+        if (Number.isNaN(n)) {
+            throw new Error('Invalid numeric value for connection URI option "' + key + '": ' + value);
+        }
+        return n;
+    }
+    return value;
+}
+/**
+ * URI schemes accepted by parseConnectionUri. `firebird://` is this driver's
+ * own scheme; `inet://`, `inet4://` and `inet6://` are Firebird's native
+ * URL-style connection strings (Firebird 3+), so a string that works with
+ * isql works here too. inet4/inet6 pin the socket's IP family (the
+ * `ipFamily` option); inet and firebird let the resolver pick.
+ */
+const URI_SCHEMES = {
+    'firebird:': undefined,
+    'inet:': undefined,
+    'inet4:': 4,
+    'inet6:': 6,
+};
+/**
+ * Firebird protocols this driver cannot speak: they are local-machine IPC
+ * transports (shared memory / named pipes), not TCP.
+ */
+const LOCAL_SCHEMES = /^(xnet|wnet):$/;
+/**
+ * Parse a firebird:// or inet:// connection URI into an options object.
+ *
+ *   firebird://user:password@host:port/database?option=value&...
+ *   inet://host:port/database              (Firebird's own URL style;
+ *   inet4://... / inet6://...               also force IPv4 / IPv6)
+ *
+ * The database part:
+ *   firebird://host/employee              → alias "employee"
+ *   firebird://host//var/db/prod.fdb      → absolute path "/var/db/prod.fdb"
+ *   firebird://host/var/db/prod.fdb       → "/var/db/prod.fdb" (a database
+ *                                           part with slashes is a path —
+ *                                           aliases cannot contain "/")
+ *   firebird://host/C:/db/prod.fdb        → Windows path "C:/db/prod.fdb"
+ *
+ * Credentials and the database path are URL-decoded, so reserved characters
+ * can be percent-encoded (e.g. p%40ss for "p@ss"). Query parameters map
+ * 1:1 to option keys and are coerced to the option's type (booleans accept
+ * 1/true/yes/on). `user` and `password` may be given as query parameters
+ * instead of in the authority.
+ */
+function parseConnectionUri(uri) {
+    var url;
+    try {
+        url = new URL(uri);
+    }
+    catch (e) {
+        throw new Error('Invalid connection URI: ' + uri);
+    }
+    var scheme = url.protocol.toLowerCase();
+    if (LOCAL_SCHEMES.test(scheme)) {
+        throw new Error('Unsupported connection URI scheme "' + scheme.replace(/:$/, '') +
+            '" (local IPC transports are not available over the wire — use inet:// or firebird://)');
+    }
+    if (!Object.prototype.hasOwnProperty.call(URI_SCHEMES, scheme)) {
+        throw new Error('Unsupported connection URI scheme "' + scheme.replace(/:$/, '') +
+            '" (expected firebird://, inet://, inet4:// or inet6://)');
+    }
+    var options = {};
+    var ipFamily = URI_SCHEMES[scheme];
+    if (ipFamily !== undefined) {
+        options.ipFamily = ipFamily;
+    }
+    if (url.hostname) {
+        // URL keeps IPv6 hostnames bracketed ([::1]); net.connect wants them bare
+        options.host = url.hostname.replace(/^\[(.*)\]$/, '$1');
+    }
+    if (url.port) {
+        options.port = Number(url.port);
+    }
+    if (url.username) {
+        options.user = decodeURIComponent(url.username);
+    }
+    if (url.password) {
+        options.password = decodeURIComponent(url.password);
+    }
+    var database = decodeURIComponent(url.pathname || '');
+    if (database.startsWith('/')) {
+        database = database.slice(1);
+    }
+    // A database part with path separators is a filesystem path, not an
+    // alias (aliases cannot contain "/") — restore the leading slash unless
+    // it is a Windows drive path or already absolute (double-slash form).
+    if (database.includes('/') && !database.startsWith('/') && !/^[A-Za-z]:\//.test(database)) {
+        database = '/' + database;
+    }
+    if (database) {
+        options.database = database;
+    }
+    url.searchParams.forEach(function (value, key) {
+        options[key] = coerce(key, value);
+    });
+    return options;
+}
+/**
+ * Parse a traditional ("old style") Firebird connection string:
+ *
+ *   [host[/port]:]{path | alias}
+ *
+ *   employee                              → alias "employee" (default host)
+ *   /var/fb/prod.fdb                      → local path (default host)
+ *   C:\fbdata\prod.fdb                    → Windows path — a single character
+ *                                           before ":" is a drive letter, not
+ *                                           a host (same rule as Firebird)
+ *   db.example.com:employee               → host + alias
+ *   db.example.com/3051:/var/fb/prod.fdb  → host + port + path
+ *   myserver:C:\fbdata\prod.fdb           → host + Windows path
+ *   [::1]/3050:employee                   → IPv6 host + port + alias
+ *
+ * Unlike firebird:// URIs, traditional strings carry no credentials or
+ * options — the driver defaults apply (SYSDBA/masterkey, port 3050).
+ * The port must be numeric; /etc/services names are not resolved.
+ */
+function parseOldStyleConnectionString(str) {
+    var options = {};
+    var host = null;
+    var port = null;
+    var database = str;
+    var ipv6 = /^\[([^\]]+)\](?:\/([^:]*))?:(.*)$/.exec(str);
+    if (ipv6) {
+        host = ipv6[1];
+        port = ipv6[2] !== undefined ? ipv6[2] : null;
+        database = ipv6[3];
+    }
+    else {
+        var colon = str.indexOf(':');
+        if (colon === 0) {
+            throw new Error('Invalid connection string (empty host): ' + str);
+        }
+        // colon === 1 → single character before ":" is a drive letter;
+        // colon === -1 → no host part. Both leave the whole string as database.
+        if (colon > 1) {
+            var hostPart = str.slice(0, colon);
+            database = str.slice(colon + 1);
+            var slash = hostPart.indexOf('/');
+            if (slash !== -1) {
+                host = hostPart.slice(0, slash);
+                port = hostPart.slice(slash + 1);
+                if (!host) {
+                    throw new Error('Invalid connection string (empty host): ' + str);
+                }
+            }
+            else {
+                host = hostPart;
+            }
+        }
+    }
+    if (!database) {
+        throw new Error('Invalid connection string (empty database): ' + str);
+    }
+    if (host) {
+        options.host = host;
+    }
+    if (port !== null) {
+        var n = Number(port);
+        if (!/^\d+$/.test(port) || n < 1 || n > 65535) {
+            throw new Error('Invalid port in connection string "' + str +
+                '" (service names are not supported — use a numeric port)');
+        }
+        options.port = n;
+    }
+    options.database = database;
+    return options;
+}
+const URI_SCHEME = /^[A-Za-z][A-Za-z0-9+.-]*:\/\//;
+/**
+ * Parse any connection string the driver accepts: a firebird:// or
+ * inet[4|6]:// URI, or a traditional [host[/port]:]database string when
+ * there is no scheme.
+ */
+function parseConnectionString(str) {
+    return URI_SCHEME.test(str)
+        ? parseConnectionUri(str)
+        : parseOldStyleConnectionString(str);
+}
+/**
+ * Accept either an options object or a connection string (firebird:// or
+ * inet:// URI, or traditional host[/port]:database) everywhere options are
+ * taken.
+ * Strings are parsed; objects pass through unchanged.
+ */
+function normalizeOptions(options) {
+    if (typeof options === 'string') {
+        options = parseConnectionString(options);
+    }
+    const normalized = applyEnvDefaults(options);
+    const numericMode = normalized && normalized.numericMode;
+    if (numericMode !== undefined && numericMode !== 'lossy' &&
+        numericMode !== 'safe' && numericMode !== 'string') {
+        throw new Error('Invalid numericMode option: ' + numericMode +
+            ' (expected "lossy", "safe", or "string")');
+    }
+    return normalized;
+}
+/**
+ * Fall back to environment variables for connection settings the caller
+ * did not provide — the pg-style convention using Firebird's own names:
+ * ISC_USER / ISC_PASSWORD (honoured by isql and every official tool) plus
+ * FIREBIRD_HOST / FIREBIRD_PORT / FIREBIRD_DATABASE / FIREBIRD_ROLE.
+ * Explicit options always win; the driver's built-in defaults (SYSDBA /
+ * masterkey / 127.0.0.1) still apply when neither is set. A fresh object
+ * is returned so caller-owned options objects are never mutated.
+ */
+const ENV_FALLBACKS = [
+    ['user', 'ISC_USER'],
+    ['password', 'ISC_PASSWORD'],
+    ['host', 'FIREBIRD_HOST'],
+    ['port', 'FIREBIRD_PORT'],
+    ['database', 'FIREBIRD_DATABASE'],
+    ['role', 'FIREBIRD_ROLE'],
+];
+function applyEnvDefaults(options) {
+    let out = options;
+    for (const [key, envName] of ENV_FALLBACKS) {
+        const value = process.env[envName];
+        // empty-string env vars (common in CI: `export ISC_PASSWORD=`)
+        // count as unset
+        if (value === undefined || value === '') {
+            continue;
+        }
+        // a service-manager connection's `database` selects the TARGET of
+        // backup/restore — never let a leftover env var pick that silently
+        if (key === 'database' && options.manager) {
+            continue;
+        }
+        if (out[key] === undefined || out[key] === null || out[key] === '') {
+            if (out === options) {
+                out = { ...options };
+            }
+            if (key === 'port') {
+                const port = Number(value);
+                if (!Number.isFinite(port) || port <= 0) {
+                    // NaN is falsy: it would silently fall back to 3050
+                    // downstream instead of surfacing the typo
+                    throw new Error('Invalid FIREBIRD_PORT environment variable: ' + value);
+                }
+                out[key] = port;
+            }
+            else {
+                out[key] = value;
+            }
+        }
+    }
+    return out;
+}

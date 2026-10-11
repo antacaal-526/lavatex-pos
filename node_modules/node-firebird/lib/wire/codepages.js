@@ -1,0 +1,173 @@
+"use strict";
+/***************************************
+ *
+ *   Single-byte codepage codecs (WIN125x, ISO8859_x, KOI8, DOS866)
+ *
+ *   Node's Buffer only decodes utf8/latin1/ascii natively. These
+ *   codepages are decoded through the WHATWG TextDecoder (backed by
+ *   ICU — present in every official Node build) and encoded through
+ *   reverse tables built from the same decoder at first use, so the
+ *   two directions can never disagree. Issues #319/#301/#422.
+ *
+ ***************************************/
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.charsetWidthById = charsetWidthById;
+exports.getCodec = getCodec;
+/** Firebird charset name → WHATWG encoding label (single-byte only). */
+const ICU_LABELS = Object.freeze({
+    WIN1250: 'windows-1250',
+    WIN1251: 'windows-1251',
+    WIN1252: 'windows-1252',
+    WIN1253: 'windows-1253',
+    WIN1254: 'windows-1254',
+    WIN1255: 'windows-1255',
+    WIN1256: 'windows-1256',
+    WIN1257: 'windows-1257',
+    WIN1258: 'windows-1258',
+    ISO8859_2: 'iso-8859-2',
+    ISO8859_3: 'iso-8859-3',
+    ISO8859_4: 'iso-8859-4',
+    ISO8859_5: 'iso-8859-5',
+    ISO8859_6: 'iso-8859-6',
+    ISO8859_7: 'iso-8859-7',
+    ISO8859_8: 'iso-8859-8',
+    ISO8859_9: 'iso-8859-9',
+    ISO8859_13: 'iso-8859-13',
+    KOI8R: 'koi8-r',
+    KOI8U: 'koi8-u',
+    DOS866: 'ibm866',
+});
+/**
+ * Bytes-per-character by Firebird charset id (RDB$CHARACTER_SETS —
+ * verified against a live server). Everything not listed (NONE, ASCII,
+ * ISO8859_x, WIN125x, DOS*, KOI8*, CYRL, TIS620, …) is single-byte.
+ */
+const CHARSET_WIDTH_BY_ID = Object.freeze({
+    3: 3, // UNICODE_FSS
+    4: 4, // UTF8
+    5: 2, // SJIS_0208
+    6: 2, // EUCJ_0208
+    44: 2, // KSC_5601
+    56: 2, // BIG_5
+    57: 2, // GB_2312
+    67: 2, // GBK
+    68: 2, // CP943C
+    69: 4, // GB18030
+});
+function charsetWidthById(id) {
+    if (id === undefined) {
+        return 1;
+    }
+    return CHARSET_WIDTH_BY_ID[id] || 1;
+}
+const cache = new Map();
+/**
+ * WHATWG windows-1252 code points for bytes 0x80–0x9F (the only range
+ * where it differs from Latin-1). Node's TextDecoder cannot be trusted
+ * here: through at least Node 20 the 'windows-1252' label is routed
+ * through a latin1 fast path, decoding this range as C1 controls, so
+ * the WIN1252 table is built from this fixed spec table instead of the
+ * runtime decoder. Later Node majors agree with this table exactly.
+ */
+const WIN1252_C1 = Object.freeze([
+    0x20AC, 0x0081, 0x201A, 0x0192, 0x201E, 0x2026, 0x2020, 0x2021,
+    0x02C6, 0x2030, 0x0160, 0x2039, 0x0152, 0x008D, 0x017D, 0x008F,
+    0x0090, 0x2018, 0x2019, 0x201C, 0x201D, 0x2022, 0x2013, 0x2014,
+    0x02DC, 0x2122, 0x0161, 0x203A, 0x0153, 0x009D, 0x017E, 0x0178,
+]);
+function buildByteToCodeTable(name, label) {
+    const toCode = new Uint16Array(256);
+    if (name === 'WIN1252') {
+        // Latin-1 identity outside 0x80–0x9F; spec table inside. Needs no
+        // ICU support at all, so WIN1252 works even on small-icu builds.
+        for (let i = 0; i < 256; i++) {
+            toCode[i] = (i & 0xE0) === 0x80 ? WIN1252_C1[i - 0x80] : i;
+        }
+        return toCode;
+    }
+    let decoder;
+    try {
+        decoder = new TextDecoder(label);
+    }
+    catch {
+        // Falling through to DEFAULT_ENCODING (UTF-8) would silently write
+        // different bytes from the explicitly requested Firebird codepage.
+        // Official Node builds include these ICU tables; constrained builds
+        // must fail clearly instead of corrupting text.
+        throw new Error(`The requested Firebird encoding ${name} requires the ${label} ICU codec, ` +
+            'but this Node.js runtime does not provide it. Use an official full-ICU ' +
+            'Node.js build, or connect with encoding NONE and pass explicitly encoded Buffer values.');
+    }
+    const one = Buffer.alloc(1);
+    for (let i = 0; i < 256; i++) {
+        one[0] = i;
+        toCode[i] = decoder.decode(one).charCodeAt(0);
+    }
+    return toCode;
+}
+function buildCodec(name) {
+    const label = ICU_LABELS[name];
+    if (!label) {
+        return null;
+    }
+    // Build both directions from one byte→code table — every byte of a
+    // single-byte codepage maps to exactly one BMP character (undefined
+    // bytes decode to U+FFFD, which is kept for decoding but never used
+    // for the reverse map).
+    const toCode = buildByteToCodeTable(name, label);
+    const toByte = new Map();
+    for (let i = 0; i < 256; i++) {
+        const ch = String.fromCharCode(toCode[i]);
+        if (ch !== '�' && !toByte.has(ch)) {
+            toByte.set(ch, i);
+        }
+    }
+    return {
+        name,
+        decode(buffer) {
+            // batch through fromCharCode instead of per-byte string concat —
+            // wide CHAR columns and text blobs decode in O(chunks) allocations
+            const codes = new Array(buffer.length);
+            for (let i = 0; i < buffer.length; i++) {
+                codes[i] = toCode[buffer[i]];
+            }
+            const CHUNK = 4096;
+            if (codes.length <= CHUNK) {
+                return String.fromCharCode(...codes);
+            }
+            let out = '';
+            for (let i = 0; i < codes.length; i += CHUNK) {
+                out += String.fromCharCode(...codes.slice(i, i + CHUNK));
+            }
+            return out;
+        },
+        encode(value) {
+            const out = Buffer.alloc(value.length);
+            for (let i = 0; i < value.length; i++) {
+                const b = toByte.get(value[i]);
+                // unmappable characters become '?' — the convention every
+                // codepage transcoder (incl. iconv) uses by default
+                out[i] = b === undefined ? 0x3f : b;
+            }
+            return out;
+        },
+    };
+}
+/**
+ * Codec for a Firebird charset name, or null when the charset is unknown or
+ * natively handled by Buffer. A known codepage whose ICU table is unavailable
+ * throws instead of silently falling back to UTF-8. Successful and unknown
+ * lookups are cached; failures are not.
+ */
+function getCodec(charsetName) {
+    if (!charsetName) {
+        return null;
+    }
+    const name = String(charsetName).toUpperCase();
+    let codec = cache.get(name);
+    if (codec === undefined) {
+        codec = buildCodec(name);
+        cache.set(name, codec);
+    }
+    return codec;
+}

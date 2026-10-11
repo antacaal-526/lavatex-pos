@@ -1,0 +1,885 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LAVATEX POS - Sistema de Lavandería</title>
+    <style>
+        :root {
+            --primary: #0284c7;
+            --primary-dark: #0369a1;
+            --success: #166534;
+            --success-bg: #dcfce7;
+            --bg-main: #f4f6f9;
+            --white: #ffffff;
+            --text-main: #334155;
+            --text-muted: #64748b;
+            --border: #e2e8f0;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background-color: var(--bg-main); color: var(--text-main); display: flex; min-height: 100vh; }
+        sidebar { width: 260px; background: var(--white); border-right: 1px solid var(--border); display: flex; flex-direction: column; padding: 20px; }
+        .brand { font-size: 22px; font-weight: bold; color: var(--primary); margin-bottom: 30px; display: flex; align-items: center; gap: 10px; }
+        .nav-item { padding: 12px 15px; color: var(--text-muted); text-decoration: none; border-radius: 8px; margin-bottom: 5px; font-weight: 600; cursor: pointer; transition: all 0.2s; display: block; }
+        .nav-item.active, .nav-item:hover { background-color: #e0f2fe; color: var(--primary); }
+        .main-content { flex: 1; padding: 30px; overflow-y: auto; }
+        .header-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }
+        .header-title h1 { font-size: 24px; color: var(--text-main); }
+        .header-title p { color: var(--text-muted); font-size: 14px; }
+        .status-badge { background-color: var(--success-bg); color: var(--success); padding: 6px 14px; border-radius: 20px; font-size: 13px; font-weight: 600; }
+        
+        .section-view { display: none; }
+        .section-view.active { display: block; }
+
+        .grid-container { display: grid; grid-template-columns: 1fr 1.5fr; gap: 25px; }
+        @media (max-width: 1024px) { .grid-container { grid-template-columns: 1fr; } }
+        
+        .card { background: var(--white); border-radius: 12px; padding: 25px; box-shadow: 0 2px 10px rgba(0,0,0,0.04); border: 1px solid var(--border); margin-bottom: 20px; }
+        .card h2 { font-size: 18px; margin-bottom: 20px; color: var(--text-main); border-bottom: 2px solid var(--border); padding-bottom: 10px; }
+        
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 5px; color: var(--text-muted); }
+        .form-control { width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; outline: none; }
+        .form-control:focus { border-color: var(--primary); }
+        
+        .btn { background-color: var(--primary); color: white; border: none; padding: 12px 20px; font-size: 14px; border-radius: 6px; cursor: pointer; font-weight: 600; width: 100%; transition: background 0.2s; }
+        .btn:hover { background-color: var(--primary-dark); }
+        .btn-wa { background-color: #25d366; color: white; border: none; padding: 6px 10px; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 12px; }
+        .btn-wa:hover { background-color: #1ebc57; }
+
+        .table-container { overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; font-size: 14px; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid var(--border); }
+        th { background-color: #f8fafc; color: var(--text-muted); font-weight: 600; }
+        tr:hover { background-color: #f8fafc; }
+        
+        .alert { padding: 12px; border-radius: 6px; margin-bottom: 15px; font-size: 14px; display: none; }
+        .alert-success { background-color: var(--success-bg); color: var(--success); }
+        .alert-error { background-color: #fee2e2; color: #991b1b; }
+
+        .resumen-caja { background: #f8fafc; padding: 15px; border-radius: 8px; margin-top: 15px; }
+        .resumen-row { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 15px; }
+        .resumen-row.total { font-weight: bold; font-size: 18px; color: var(--primary); border-top: 1px solid var(--border); padding-top: 8px; }
+
+        #modalTicket {
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.5); justify-content: center; align-items: center; z-index: 1000;
+        }
+        .ticket-box {
+            background: white; padding: 20px; border-radius: 8px; width: 340px; font-family: monospace; font-size: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.2); text-align: center;
+        }
+        .ticket-box hr { border: none; border-top: 1px dashed #000; margin: 10px 0; }
+
+        @media print {
+            body * { visibility: hidden; }
+            #modalTicket, #modalTicket * { visibility: visible; }
+            #modalTicket { position: absolute; left: 0; top: 0; width: 100%; height: auto; background: none; }
+            .no-print { display: none !important; }
+        }
+    </style>
+</head>
+<body>
+
+    <sidebar>
+        <div class="brand">🧺 LAVATEX POS</div>
+        <a class="nav-item active" onclick="cambiarVista('clientes', this)">👥 Clientes</a>
+        <a class="nav-item" onclick="cambiarVista('ordenes', this)">📦 Órdenes y Recepción</a>
+        <a class="nav-item" onclick="cambiarVista('seguimiento', this)">🔍 Trazabilidad y Ubicación</a>
+        <a class="nav-item" onclick="cambiarVista('servicios', this)">⚙️ Tarifas y Servicios</a>
+        <a class="nav-item" onclick="cambiarVista('caja', this)">📊 Caja y Finanzas</a>
+        <a class="nav-item" onclick="cambiarVista('insumos', this)">🧪 Inventario de Insumos</a>
+        <a class="nav-item" onclick="cambiarVista('reportes', this)">📈 Reportes y Métricas</a>
+    </sidebar>
+
+    <div class="main-content">
+        <div class="header-top">
+            <div class="header-title">
+                <h1 id="viewTitle">Módulo de Clientes</h1>
+                <p id="viewSubtitle">Gestión de clientes y fichas de contacto</p>
+            </div>
+            <div class="status-badge">● Servidor En Línea</div>
+        </div>
+
+        <!-- VISTA CLIENTES -->
+        <div id="vista-clientes" class="section-view active">
+            <div class="grid-container">
+                <div class="card">
+                    <h2>Nuevo Cliente</h2>
+                    <div id="formAlertCliente" class="alert"></div>
+                    <form id="clientForm" onsubmit="registrarCliente(event)">
+                        <div class="form-group"><label>Nombre Completo *</label><input type="text" id="nombre_completo" class="form-control" required placeholder="Ej. Juan Pérez"></div>
+                        <div class="form-group"><label>Teléfono / Celular *</label><input type="text" id="telefono" class="form-control" required placeholder="Ej. 3101234567"></div>
+                        <div class="form-group"><label>Cédula / NIT</label><input type="text" id="numero_identificacion" class="form-control" placeholder="Opcional"></div>
+                        <div class="form-group"><label>Dirección y Barrio</label><input type="text" id="direccion" class="form-control" placeholder="Ej. Calle 15 # 7-20"></div>
+                        <div class="form-group"><label>Correo Electrónico</label><input type="email" id="correo" class="form-control" placeholder="correo@mail.com"></div>
+                        <button type="submit" class="btn">Guardar Cliente</button>
+                    </form>
+                </div>
+                <div class="card">
+                    <h2>Clientes Registrados</h2>
+                    <div class="form-group"><input type="text" id="searchInput" class="form-control" placeholder="Buscar cliente..." onkeyup="filtrarClientes()"></div>
+                    <div class="table-container">
+                        <table>
+                            <thead><tr><th>Nombre</th><th>Teléfono</th><th>Dirección</th></tr></thead>
+                            <tbody id="clientsTableBody"><tr><td colspan="3" style="text-align: center;">Cargando...</td></tr></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- VISTA ORDENES -->
+        <div id="vista-ordenes" class="section-view">
+            <div class="grid-container">
+                <div class="card">
+                    <h2>Nueva Orden / Mostrador</h2>
+                    <div id="formAlertOrden" class="alert"></div>
+                    <form id="orderForm" onsubmit="crearOrden(event)">
+                        <div class="form-group">
+                            <label>Seleccionar Cliente *</label>
+                            <select id="selectCliente" class="form-control" required><option value="">-- Seleccione cliente --</option></select>
+                        </div>
+                        <div class="form-group">
+                            <label>Seleccionar Servicio *</label>
+                            <select id="selectServicio" class="form-control" onchange="agregarItemOrden()"><option value="">-- Agregar servicio --</option></select>
+                        </div>
+
+                        <div class="table-container" style="margin-bottom: 15px;">
+                            <table>
+                                <thead><tr><th>Servicio</th><th>Cant</th><th>Subtotal</th><th>X</th></tr></thead>
+                                <tbody id="itemsOrdenBody"><tr><td colspan="4" style="text-align: center; color: var(--text-muted);">Sin servicios agregados</td></tr></tbody>
+                            </table>
+                        </div>
+
+                        <div class="form-group"><label>Descuento ($ COP)</label><input type="number" id="descuentoOrden" value="0" min="0" class="form-control" onchange="calcularTotalesOrden()"></div>
+                        <div class="form-group"><label>Abono Inicial ($ COP)</label><input type="number" id="abonoOrden" value="0" min="0" class="form-control" onchange="calcularTotalesOrden()"></div>
+                        <div class="form-group"><label>Observaciones</label><input type="text" id="observacionesOrden" class="form-control" placeholder="Ej. Entregar doblado"></div>
+
+                        <div class="resumen-caja">
+                            <div class="resumen-row"><span>Subtotal:</span><span id="lblSubtotal">$0 COP</span></div>
+                            <div class="resumen-row"><span>Descuento:</span><span id="lblDescuento">$0 COP</span></div>
+                            <div class="resumen-row total"><span>Total a Pagar:</span><span id="lblTotal">$0 COP</span></div>
+                            <div class="resumen-row"><span>Abono:</span><span id="lblAbono">$0 COP</span></div>
+                            <div class="resumen-row" style="color: #dc2626; font-weight: bold;"><span>Saldo Pendiente:</span><span id="lblSaldo">$0 COP</span></div>
+                        </div>
+
+                        <button type="submit" class="btn" style="margin-top: 15px;">Generar Orden y Ver Ticket</button>
+                    </form>
+                </div>
+
+                <div class="card">
+                    <h2>Órdenes Recientes</h2>
+                    <div class="table-container">
+                        <table>
+                            <thead><tr><th>N° Orden</th><th>Cliente</th><th>Total</th><th>Acción</th></tr></thead>
+                            <tbody id="ordersTableBody"><tr><td colspan="4" style="text-align: center;">Cargando...</td></tr></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- VISTA TRAZABILIDAD -->
+        <div id="vista-seguimiento" class="section-view">
+            <div class="card">
+                <h2>Control de Estados, Ubicación y Notificaciones</h2>
+                <div class="form-group"><input type="text" id="searchTracking" class="form-control" placeholder="Buscar por número de orden o nombre de cliente..." onkeyup="filtrarTracking()"></div>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>N° Orden</th>
+                                <th>Cliente</th>
+                                <th>Estado Actual</th>
+                                <th>Ubicación Física</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="trackingTableBody"><tr><td colspan="5" style="text-align: center;">Cargando...</td></tr></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- VISTA SERVICIOS Y TARIFAS (ADMINISTRACIÓN COMPLETA) -->
+        <div id="vista-servicios" class="section-view">
+            <div class="grid-container">
+                <div class="card">
+                    <h2 id="tituloFormServicio">Registrar Nuevo Servicio / Tarifa</h2>
+                    <div id="formAlertServicio" class="alert"></div>
+                    <form id="servicioForm" onsubmit="guardarServicio(event)">
+                        <input type="hidden" id="edit_servicio_id">
+                        <div class="form-group"><label>Nombre del Servicio *</label><input type="text" id="nombre_serv" class="form-control" required placeholder="Ej. Lavado Edredón King"></div>
+                        <div class="form-group"><label>Descripción</label><input type="text" id="desc_serv" class="form-control" placeholder="Ej. Proceso especial en seco"></div>
+                        <div class="form-group">
+                            <label>Unidad de Cobro *</label>
+                            <select id="unidad_serv" class="form-control" required>
+                                <option value="unidad">Por Unidad</option>
+                                <option value="peso">Por Kilo</option>
+                                <option value="metro">Por Metro Cuadrado</option>
+                                <option value="especial">Servicio Fijo Especial</option>
+                            </select>
+                        </div>
+                        <div class="form-group"><label>Precio ($ COP) *</label><input type="number" id="precio_serv" class="form-control" required min="0" placeholder="Ej. 15000"></div>
+                        <div class="form-group"><label>Tiempo Estimado (Horas)</label><input type="number" id="tiempo_serv" class="form-control" value="24" min="1"></div>
+                        <div class="form-group" id="grupoEstadoServicio" style="display:none;">
+                            <label>Estado</label>
+                            <select id="activo_serv" class="form-control">
+                                <option value="1">Activo (Disponible en Mostrador)</option>
+                                <option value="0">Inactivo (Oculto)</option>
+                            </select>
+                        </div>
+                        <button type="submit" class="btn" id="btnGuardarServicio">Guardar Tarifa</button>
+                        <button type="button" class="btn" id="btnCancelarServicio" onclick="cancelarEdicionServicio()" style="background:#64748b; margin-top:8px; display:none;">Cancelar Edición</button>
+                    </form>
+                </div>
+
+                <div class="card">
+                    <h2>Servicios y Precios Vigentes</h2>
+                    <div class="table-container">
+                        <table>
+                            <thead><tr><th>Servicio</th><th>Unidad</th><th>Precio (COP)</th><th>Estado</th><th>Acciones</th></tr></thead>
+                            <tbody id="serviciosTableBody"><tr><td colspan="5" style="text-align: center;">Cargando...</td></tr></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- VISTA CAJA Y FINANZAS -->
+        <div id="vista-caja" class="section-view">
+            <div class="grid-container">
+                <div class="card">
+                    <h2>Control Diario de Caja</h2>
+                    <div id="estadoCajaBox" style="margin-bottom: 20px;">Cargando estado...</div>
+                    <div id="formAlertCaja" class="alert"></div>
+
+                    <div id="boxAbrirCaja" style="display:none;">
+                        <h3>Apertura de Caja</h3>
+                        <div class="form-group"><label>Monto Inicial de Apertura ($ COP) *</label><input type="number" id="montoApertura" class="form-control" value="50000"></div>
+                        <button class="btn" onclick="abrirCaja()">Abrir Turno de Caja</button>
+                    </div>
+
+                    <div id="boxCajaAbierta" style="display:none;">
+                        <h3>Registrar Gasto / Egreso de Caja</h3>
+                        <div class="form-group"><label>Monto ($ COP) *</label><input type="number" id="montoEgreso" class="form-control" placeholder="Ej. 12000"></div>
+                        <div class="form-group"><label>Concepto del Gasto *</label><input type="text" id="conceptoEgreso" class="form-control" placeholder="Ej. Compra de detergente"></div>
+                        <button class="btn" onclick="registrarEgreso()" style="background:#e11d48; margin-bottom: 20px;">Registrar Egreso</button>
+
+                        <hr style="margin: 20px 0;">
+
+                        <h3>Cierre de Caja (Arqueo)</h3>
+                        <div class="form-group"><label>Efectivo Contado en Caja ($ COP) *</label><input type="number" id="montoCierre" class="form-control" placeholder="Monto real en la caja"></div>
+                        <button class="btn" onclick="cerrarCaja()" style="background:#15803d;">Cerrar Turno y Realizar Arqueo</button>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h2>Resumen del Turno Actual</h2>
+                    <div class="resumen-caja">
+                        <div class="resumen-row"><span>Monto Apertura:</span><span id="lblMontoApertura">$0 COP</span></div>
+                        <div class="resumen-row"><span>Total Ingresos (Abonos/Pagos):</span><span id="lblTotalIngresos">$0 COP</span></div>
+                        <div class="resumen-row"><span>Total Egresos (Gastos):</span><span id="lblTotalEgresos" style="color:#e11d48;">$0 COP</span></div>
+                        <div class="resumen-row total"><span>Efectivo Esperado en Caja:</span><span id="lblSaldoEsperado">$0 COP</span></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- VISTA INSUMOS -->
+        <div id="vista-insumos" class="section-view">
+            <div class="grid-container">
+                <div class="card">
+                    <h2>Registrar Entrada / Salida de Insumo</h2>
+                    <div id="formAlertInsumo" class="alert"></div>
+                    <form id="movInsumoForm" onsubmit="registrarMovimientoInsumo(event)">
+                        <div class="form-group">
+                            <label>Seleccionar Insumo *</label>
+                            <select id="selectInsumo" class="form-control" required><option value="">-- Seleccione insumo --</option></select>
+                        </div>
+                        <div class="form-group">
+                            <label>Tipo de Movimiento *</label>
+                            <select id="tipoMovInsumo" class="form-control" required>
+                                <option value="ENTRADA_COMPRA">Entrada (+ Compra / Recarga)</option>
+                                <option value="SALIDA_CONSUMO">Salida (- Consumo en lavandería)</option>
+                            </select>
+                        </div>
+                        <div class="form-group"><label>Cantidad *</label><input type="number" id="cantInsumo" class="form-control" required min="1"></div>
+                        <div class="form-group"><label>Motivo / Observación</label><input type="text" id="motivoInsumo" class="form-control" placeholder="Ej. Lavado de cobijas"></div>
+                        <button type="submit" class="btn">Guardar Movimiento</button>
+                    </form>
+                </div>
+
+                <div class="card">
+                    <h2>Stock Actual de Insumos</h2>
+                    <div class="table-container">
+                        <table>
+                            <thead><tr><th>Insumo</th><th>Medida</th><th>Stock Actual</th><th>Mínimo</th></tr></thead>
+                            <tbody id="insumosTableBody"><tr><td colspan="4" style="text-align: center;">Cargando...</td></tr></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- VISTA REPORTES -->
+        <div id="vista-reportes" class="section-view">
+            <div class="card" style="margin-bottom: 20px;">
+                <h2>Filtrar Reporte de Ventas por Fecha</h2>
+                <div style="display: flex; gap: 15px; align-items: flex-end;">
+                    <div class="form-group" style="flex: 1; margin-bottom: 0;"><label>Desde:</label><input type="date" id="filtroFechaInicio" class="form-control"></div>
+                    <div class="form-group" style="flex: 1; margin-bottom: 0;"><label>Hasta:</label><input type="date" id="filtroFechaFin" class="form-control"></div>
+                    <button class="btn" style="width: auto; padding: 10px 20px;" onclick="cargarReportes()">Filtrar Fechas</button>
+                    <button class="btn" style="width: auto; padding: 10px 20px; background:#166534;" onclick="window.print()">🖨️ Imprimir Reporte</button>
+                </div>
+            </div>
+
+            <div class="grid-container">
+                <div class="card">
+                    <h2>Resumen Contable y Financiero</h2>
+                    <div class="resumen-caja">
+                        <div class="resumen-row"><span>Total Pedidos Creados:</span><span id="repTotalPedidos">0</span></div>
+                        <div class="resumen-row"><span>Valor Subtotal Vendido:</span><span id="repSubtotal">$0 COP</span></div>
+                        <div class="resumen-row"><span>Descuentos Aplicados:</span><span id="repDescuentos" style="color:#dc2626;">$0 COP</span></div>
+                        <div class="resumen-row total"><span>Total Vendido (Nominal):</span><span id="repTotalVendido">$0 COP</span></div>
+                        <div class="resumen-row"><span>Abonos en Pedidos:</span><span id="repAbonos" style="color:#166534;">$0 COP</span></div>
+                        <div class="resumen-row"><span>Dinero Recibido en Caja:</span><span id="repDineroCaja" style="color:#166534; font-weight:bold;">$0 COP</span></div>
+                        <div class="resumen-row"><span>Saldos Pendientes de Cobro:</span><span id="repSaldosPendientes" style="color:#dc2626; font-weight:bold;">$0 COP</span></div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h2>Desglose por Servicios</h2>
+                    <div class="table-container">
+                        <table>
+                            <thead><tr><th>Servicio</th><th>Cantidad</th><th>Total Generado</th></tr></thead>
+                            <tbody id="repTopServiciosBody"><tr><td colspan="3" style="text-align: center;">Cargando...</td></tr></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- MODAL VISTA PREVIA TICKET -->
+    <div id="modalTicket">
+        <div class="ticket-box">
+            <h2 style="font-size:16px;">LAVANDERÍA LAVATEX</h2>
+            <p>Tunja, Boyacá - Colombia</p>
+            <p>Tel: 310 000 0000</p>
+            <hr>
+            <p id="t_codigo" style="font-weight:bold; font-size:14px;"></p>
+            <p id="t_fecha"></p>
+            <p id="t_cliente" style="text-align:left; margin-top:5px;"></p>
+            <hr>
+            <div id="t_items" style="text-align:left;"></div>
+            <hr>
+            <p id="t_subtotal" style="text-align:right;"></p>
+            <p id="t_total" style="text-align:right; font-weight:bold;"></p>
+            <p id="t_abono" style="text-align:right;"></p>
+            <p id="t_saldo" style="text-align:right; font-weight:bold; color:#e11d48;"></p>
+            <hr>
+            <p style="font-size:11px;">¡Gracias por su preferencia!</p>
+            <button class="btn no-print" onclick="window.print()" style="margin-top:15px; background:#166534;">🖨️ Imprimir Ticket</button>
+            <button class="btn no-print" onclick="cerrarTicket()" style="margin-top:5px; background:#64748b;">Cerrar</button>
+        </div>
+    </div>
+
+    <script>
+        let clientesCache = [], serviciosCache = [], ordenesCache = [], itemsOrdenActual = [], insumosCache = [], serviciosAdminCache = [];
+
+        function cambiarVista(vista, elemento) {
+            document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.section-view').forEach(el => el.classList.remove('active'));
+            if(elemento) elemento.classList.add('active');
+            
+            if(vista === 'clientes') {
+                document.getElementById('vista-clientes').classList.add('active');
+                cargarClientes();
+            } else if(vista === 'ordenes') {
+                document.getElementById('vista-ordenes').classList.add('active');
+                cargarDatosOrden();
+            } else if(vista === 'seguimiento') {
+                document.getElementById('vista-seguimiento').classList.add('active');
+                cargarDatosTracking();
+            } else if(vista === 'servicios') {
+                document.getElementById('vista-servicios').classList.add('active');
+                cargarServiciosAdmin();
+            } else if(vista === 'caja') {
+                document.getElementById('vista-caja').classList.add('active');
+                cargarEstadoCaja();
+            } else if(vista === 'insumos') {
+                document.getElementById('vista-insumos').classList.add('active');
+                cargarDatosInsumos();
+            } else if(vista === 'reportes') {
+                document.getElementById('vista-reportes').classList.add('active');
+                const hoy = new Date().toISOString().slice(0, 10);
+                if(!document.getElementById('filtroFechaInicio').value) {
+                    document.getElementById('filtroFechaInicio').value = hoy;
+                    document.getElementById('filtroFechaFin').value = hoy;
+                }
+                cargarReportes();
+            }
+        }
+
+        async function cargarClientes() {
+            const res = await fetch('/api/clientes');
+            const result = await res.json();
+            if (result.status === 'success') { clientesCache = result.data; renderizarTablaClientes(clientesCache); }
+        }
+
+        function renderizarTablaClientes(clientes) {
+            const tbody = document.getElementById('clientsTableBody');
+            if (clientes.length === 0) { tbody.innerHTML = `<tr><td colspan="3" style="text-align: center;">No hay clientes.</td></tr>`; return; }
+            tbody.innerHTML = clientes.map(c => `<tr><td><strong>${c.nombre_completo}</strong></td><td>${c.telefono}</td><td>${c.direccion || 'N/A'}</td></tr>`).join('');
+        }
+
+        async function registrarCliente(e) {
+            e.preventDefault();
+            const alertBox = document.getElementById('formAlertCliente');
+            const nuevo = {
+                nombre_completo: document.getElementById('nombre_completo').value,
+                telefono: document.getElementById('telefono').value,
+                numero_identificacion: document.getElementById('numero_identificacion').value,
+                direccion: document.getElementById('direccion').value,
+                correo: document.getElementById('correo').value
+            };
+            const res = await fetch('/api/clientes', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(nuevo) });
+            const result = await res.json();
+            if(res.ok) { alertBox.className = 'alert alert-success'; alertBox.innerText = result.message; alertBox.style.display = 'block'; document.getElementById('clientForm').reset(); cargarClientes(); }
+            else { alertBox.className = 'alert alert-error'; alertBox.innerText = result.message; alertBox.style.display = 'block'; }
+            setTimeout(() => alertBox.style.display = 'none', 3000);
+        }
+
+        function filtrarClientes() {
+            const texto = document.getElementById('searchInput').value.toLowerCase();
+            const filtrados = clientesCache.filter(c => c.nombre_completo.toLowerCase().includes(texto) || c.telefono.includes(texto));
+            renderizarTablaClientes(filtrados);
+        }
+
+        async function cargarDatosOrden() {
+            const resC = await fetch('/api/clientes');
+            const rC = await resC.json();
+            if(rC.status === 'success') {
+                document.getElementById('selectCliente').innerHTML = `<option value="">-- Seleccione cliente --</option>` + rC.data.map(c => `<option value="${c.id}">${c.nombre_completo} (${c.telefono})</option>`).join('');
+            }
+
+            const resS = await fetch('/api/ordenes/servicios');
+            const rS = await resS.json();
+            if(rS.status === 'success') {
+                serviciosCache = rS.data;
+                document.getElementById('selectServicio').innerHTML = `<option value="">-- Agregar servicio --</option>` + serviciosCache.map(s => `<option value="${s.id}">${s.nombre} - $${s.precio.toLocaleString()} COP</option>`).join('');
+            }
+            cargarTablaOrdenesRecientes();
+        }
+
+        function agregarItemOrden() {
+            const select = document.getElementById('selectServicio');
+            const servicioId = select.value;
+            if(!servicioId) return;
+            const serv = serviciosCache.find(s => s.id == servicioId);
+            if(!serv) return;
+
+            let cantidad = prompt(`Cantidad o peso para "${serv.nombre}":`, "1");
+            if(cantidad === null || isNaN(cantidad) || Number(cantidad) <= 0) return;
+
+            itemsOrdenActual.push({ servicio_id: serv.id, nombre: serv.nombre, cantidad: parseFloat(cantidad), precio_unitario: serv.precio });
+            select.value = "";
+            renderizarItemsOrden();
+        }
+
+        function eliminarItemOrden(index) { itemsOrdenActual.splice(index, 1); renderizarItemsOrden(); }
+
+        function renderizarItemsOrden() {
+            const tbody = document.getElementById('itemsOrdenBody');
+            if(itemsOrdenActual.length === 0) { tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--text-muted);">Sin servicios agregados</td></tr>`; calcularTotalesOrden(); return; }
+            tbody.innerHTML = itemsOrdenActual.map((item, index) => `
+                <tr><td>${item.nombre}</td><td>${item.cantidad}</td><td>$${(item.cantidad * item.precio_unitario).toLocaleString()}</td>
+                <td><button type="button" onclick="eliminarItemOrden(${index})" style="background:#dc2626; color:white; border:none; padding:4px 8px; border-radius:4px; cursor:pointer;">X</button></td></tr>
+            `).join('');
+            calcularTotalesOrden();
+        }
+
+        function calcularTotalesOrden() {
+            let subtotal = itemsOrdenActual.reduce((acc, item) => acc + (item.cantidad * item.precio_unitario), 0);
+            let descuento = parseFloat(document.getElementById('descuentoOrden').value) || 0;
+            let total = Math.max(0, subtotal - descuento);
+            let abono = parseFloat(document.getElementById('abonoOrden').value) || 0;
+            let saldo = Math.max(0, total - abono);
+
+            document.getElementById('lblSubtotal').innerText = `$${subtotal.toLocaleString()} COP`;
+            document.getElementById('lblDescuento').innerText = `$${descuento.toLocaleString()} COP`;
+            document.getElementById('lblTotal').innerText = `$${total.toLocaleString()} COP`;
+            document.getElementById('lblAbono').innerText = `$${abono.toLocaleString()} COP`;
+            document.getElementById('lblSaldo').innerText = `$${saldo.toLocaleString()} COP`;
+        }
+
+        async function crearOrden(e) {
+            e.preventDefault();
+            const alertBox = document.getElementById('formAlertOrden');
+            if(itemsOrdenActual.length === 0) { alertBox.className = 'alert alert-error'; alertBox.innerText = 'Debe agregar al menos un servicio.'; alertBox.style.display = 'block'; return; }
+
+            const nuevaOrden = {
+                cliente_id: document.getElementById('selectCliente').value,
+                items: itemsOrdenActual,
+                descuento: parseFloat(document.getElementById('descuentoOrden').value) || 0,
+                abono: parseFloat(document.getElementById('abonoOrden').value) || 0,
+                observaciones: document.getElementById('observacionesOrden').value
+            };
+
+            const res = await fetch('/api/ordenes', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(nuevaOrden) });
+            const result = await res.json();
+
+            if(res.ok) {
+                alertBox.className = 'alert alert-success'; alertBox.innerText = `¡Orden ${result.codigo_orden} creada!`; alertBox.style.display = 'block';
+                itemsOrdenActual = []; document.getElementById('orderForm').reset(); renderizarItemsOrden(); cargarTablaOrdenesRecientes();
+                verTicket(result.ordenId);
+            } else { alertBox.className = 'alert alert-error'; alertBox.innerText = result.message; alertBox.style.display = 'block'; }
+            setTimeout(() => alertBox.style.display = 'none', 4000);
+        }
+
+        async function cargarTablaOrdenesRecientes() {
+            const res = await fetch('/api/ordenes');
+            const result = await res.json();
+            const tbody = document.getElementById('ordersTableBody');
+            if(result.status === 'success') {
+                if(result.data.length === 0) { tbody.innerHTML = `<tr><td colspan="4" style="text-align: center;">No hay órdenes.</td></tr>`; return; }
+                tbody.innerHTML = result.data.map(o => `
+                    <tr>
+                        <td><strong>${o.codigo_orden}</strong></td>
+                        <td>${o.cliente_nombre || 'General'}</td>
+                        <td>$${o.total.toLocaleString()} COP</td>
+                        <td>
+                            <button onclick="verTicket(${o.id})" style="background:#0284c7; color:white; border:none; padding:4px 8px; border-radius:4px; cursor:pointer;">🧾 Ticket</button>
+                            <button onclick="enviarWhatsapp(${o.id})" class="btn-wa">📲 WA</button>
+                        </td>
+                    </tr>
+                `).join('');
+            }
+        }
+
+        async function cargarDatosTracking() {
+            const res = await fetch('/api/ordenes');
+            const result = await res.json();
+            if(result.status === 'success') {
+                ordenesCache = result.data;
+                renderizarTablaTracking(ordenesCache);
+            }
+        }
+
+        function renderizarTablaTracking(ordenes) {
+            const tbody = document.getElementById('trackingTableBody');
+            if(ordenes.length === 0) { tbody.innerHTML = `<tr><td colspan="5" style="text-align: center;">No hay órdenes registradas.</td></tr>`; return; }
+
+            tbody.innerHTML = ordenes.map(o => `
+                <tr>
+                    <td><strong>${o.codigo_orden}</strong></td>
+                    <td>${o.cliente_nombre || 'General'}</td>
+                    <td>
+                        <select id="estado_${o.id}" class="form-control" style="padding:4px;">
+                            <option value="Recibido" ${o.estado === 'Recibido' ? 'selected' : ''}>Recibido</option>
+                            <option value="En Lavado" ${o.estado === 'En Lavado' ? 'selected' : ''}>En Lavado</option>
+                            <option value="En Planchado" ${o.estado === 'En Planchado' ? 'selected' : ''}>En Planchado</option>
+                            <option value="Listo para Entrega" ${o.estado === 'Listo para Entrega' ? 'selected' : ''}>Listo para Entrega</option>
+                            <option value="Entregado" ${o.estado === 'Entregado' ? 'selected' : ''}>Entregado</option>
+                        </select>
+                    </td>
+                    <td>
+                        <input type="text" id="ubicacion_${o.id}" class="form-control" value="${o.ubicacion_fisica || 'Estantería Principal'}" style="padding:4px;">
+                    </td>
+                    <td>
+                        <button onclick="actualizarTracking(${o.id})" style="background:#166534; color:white; border:none; padding:6px 10px; border-radius:4px; cursor:pointer; font-weight:bold;">Guardar</button>
+                        <button onclick="enviarWhatsapp(${o.id})" class="btn-wa" style="margin-left:4px;">📲 Notificar</button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function filtrarTracking() {
+            const texto = document.getElementById('searchTracking').value.toLowerCase();
+            const filtrados = ordenesCache.filter(o => o.codigo_orden.toLowerCase().includes(texto) || (o.cliente_nombre && o.cliente_nombre.toLowerCase().includes(texto)));
+            renderizarTablaTracking(filtrados);
+        }
+
+        async function actualizarTracking(ordenId) {
+            const estado = document.getElementById(`estado_${ordenId}`).value;
+            const ubicacion = document.getElementById(`ubicacion_${ordenId}`).value;
+
+            let abonarAdicional = 0;
+            if(estado === 'Entregado') {
+                const orden = ordenesCache.find(o => o.id === ordenId);
+                if(orden && orden.saldo > 0) {
+                    let pagarTodo = confirm(`La orden tiene un saldo pendiente de $${orden.saldo.toLocaleString()} COP.\n¿Desea registrar el pago total de este saldo al entregar?`);
+                    if(pagarTodo) { abonarAdicional = orden.saldo; }
+                }
+            }
+
+            const res = await fetch(`/api/ordenes/${ordenId}/estado`, {
+                method: 'PUT',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ estado: estado, ubicacion_fisica: ubicacion, abonar_adicional: abonarAdicional })
+            });
+
+            const result = await res.json();
+            if(res.ok) {
+                alert(`¡Estado actualizado con éxito a "${estado}"!`);
+                cargarDatosTracking();
+            } else {
+                alert('Error al actualizar: ' + result.message);
+            }
+        }
+
+        async function enviarWhatsapp(ordenId) {
+            const res = await fetch(`/api/ordenes/${ordenId}/whatsapp`);
+            const result = await res.json();
+            if(result.status === 'success') {
+                window.open(result.urlWhatsapp, '_blank');
+            } else {
+                alert('No se pudo generar la notificación: ' + result.message);
+            }
+        }
+
+        async function verTicket(ordenId) {
+            const res = await fetch(`/api/caja/ticket/${ordenId}`);
+            const result = await res.json();
+            if(result.status === 'success') {
+                const t = result.ticket;
+                document.getElementById('t_codigo').innerText = t.orden.codigo_orden;
+                document.getElementById('t_fecha').innerText = new Date(t.orden.fecha_recepcion).toLocaleString();
+                document.getElementById('t_cliente').innerText = `Cliente: ${t.orden.cliente_nombre || 'General'}\nTeléfono: ${t.orden.cliente_telefono || 'N/A'}`;
+                document.getElementById('t_items').innerHTML = t.items.map(i => `<p>${i.cantidad}x ${i.servicio_nombre} = $${i.subtotal_item.toLocaleString()} COP</p>`).join('');
+                document.getElementById('t_subtotal').innerText = `Subtotal: $${t.orden.subtotal.toLocaleString()} COP`;
+                document.getElementById('t_total').innerText = `TOTAL: $${t.orden.total.toLocaleString()} COP`;
+                document.getElementById('t_abono').innerText = `Abono: $${t.orden.abono.toLocaleString()} COP`;
+                document.getElementById('t_saldo').innerText = `Saldo Pendiente: $${t.orden.saldo.toLocaleString()} COP`;
+                document.getElementById('modalTicket').style.display = 'flex';
+            }
+        }
+
+        function cerrarTicket() { document.getElementById('modalTicket').style.display = 'none'; }
+
+        // --- MÓDULO ADMINISTRACIÓN DE SERVICIOS ---
+        async function cargarServiciosAdmin() {
+            const res = await fetch('/api/ordenes/servicios?admin=true');
+            const result = await res.json();
+            if(result.status === 'success') {
+                serviciosAdminCache = result.data;
+                document.getElementById('serviciosTableBody').innerHTML = serviciosAdminCache.map(s => `
+                    <tr>
+                        <td><strong>${s.nombre}</strong><br><small style="color:var(--text-muted);">${s.descripcion || ''}</small></td>
+                        <td>${s.unidad_cobro}</td>
+                        <td><strong>$${s.precio.toLocaleString()} COP</strong></td>
+                        <td><span style="${s.activo === 1 ? 'color:#166534; font-weight:bold;' : 'color:#dc2626; font-weight:bold;'}">${s.activo === 1 ? 'Activo' : 'Inactivo'}</span></td>
+                        <td>
+                            <button onclick="prepararEdicionServicio(${s.id})" style="background:#0284c7; color:white; border:none; padding:6px 10px; border-radius:4px; cursor:pointer; font-weight:bold; margin-right:4px;">Editar</button>
+                            <button onclick="eliminarServicio(${s.id})" style="background:#dc2626; color:white; border:none; padding:6px 10px; border-radius:4px; cursor:pointer; font-weight:bold;">Eliminar</button>
+                        </td>
+                    </tr>
+                `).join('');
+            }
+        }
+
+        async function guardarServicio(e) {
+            e.preventDefault();
+            const alertBox = document.getElementById('formAlertServicio');
+            const id = document.getElementById('edit_servicio_id').value;
+            
+            const servicioData = {
+                nombre: document.getElementById('nombre_serv').value,
+                descripcion: document.getElementById('desc_serv').value,
+                unidad_cobro: document.getElementById('unidad_serv').value,
+                precio: parseFloat(document.getElementById('precio_serv').value),
+                tiempo_estimado_horas: 24,
+                activo: parseInt(document.getElementById('activo_serv').value)
+            };
+
+            let url = '/api/ordenes/servicios';
+            let method = 'POST';
+
+            if(id) {
+                url = `/api/ordenes/servicios/${id}`;
+                method = 'PUT';
+            }
+
+            const res = await fetch(url, {
+                method: method,
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(servicioData)
+            });
+            const result = await res.json();
+
+            if(res.ok) {
+                alertBox.className = 'alert alert-success';
+                alertBox.innerText = result.message;
+                alertBox.style.display = 'block';
+                cancelarEdicionServicio();
+                cargarServiciosAdmin();
+            } else {
+                alertBox.className = 'alert alert-error';
+                alertBox.innerText = result.message;
+                alertBox.style.display = 'block';
+            }
+            setTimeout(() => alertBox.style.display = 'none', 4000);
+        }
+
+        function prepararEdicionServicio(id) {
+            const serv = serviciosAdminCache.find(s => s.id === id);
+            if(!serv) return;
+
+            document.getElementById('edit_servicio_id').value = serv.id;
+            document.getElementById('nombre_serv').value = serv.nombre;
+            document.getElementById('desc_serv').value = serv.descripcion || '';
+            document.getElementById('unidad_serv').value = serv.unidad_cobro;
+            document.getElementById('precio_serv').value = serv.precio;
+            document.getElementById('activo_serv').value = serv.activo;
+
+            document.getElementById('tituloFormServicio').innerText = `Editar Servicio: ${serv.nombre}`;
+            document.getElementById('btnGuardarServicio').innerText = 'Actualizar Tarifa';
+            document.getElementById('btnCancelarServicio').style.display = 'block';
+            document.getElementById('grupoEstadoServicio').style.display = 'block';
+        }
+
+        function cancelarEdicionServicio() {
+            document.getElementById('servicioForm').reset();
+            document.getElementById('edit_servicio_id').value = '';
+            document.getElementById('tituloFormServicio').innerText = 'Registrar Nuevo Servicio / Tarifa';
+            document.getElementById('btnGuardarServicio').innerText = 'Guardar Tarifa';
+            document.getElementById('btnCancelarServicio').style.display = 'none';
+            document.getElementById('grupoEstadoServicio').style.display = 'none';
+        }
+
+        async function eliminarServicio(id) {
+            if(!confirm('¿Estás seguro de eliminar este servicio?\n(Si ya ha sido usado en pedidos anteriores, el sistema lo desactivará automáticamente para proteger el historial).')) return;
+
+            const res = await fetch(`/api/ordenes/servicios/${id}`, { method: 'DELETE' });
+            const result = await res.json();
+
+            if(res.ok) {
+                alert(result.message);
+                cargarServiciosAdmin();
+            } else {
+                alert('Error al procesar la solicitud: ' + result.message);
+            }
+        }
+
+        async function cargarEstadoCaja() {
+            const res = await fetch('/api/caja/estado');
+            const result = await res.json();
+            const boxStatus = document.getElementById('estadoCajaBox');
+            if(result.cajaAbierta) {
+                boxStatus.innerHTML = `<span style="background:#dcfce7; color:#166534; padding:8px 12px; border-radius:6px; font-weight:bold;">● CAJA ABIERTA - Turno #${result.turno.id}</span>`;
+                document.getElementById('boxAbrirCaja').style.display = 'none';
+                document.getElementById('boxCajaAbierta').style.display = 'block';
+                document.getElementById('lblMontoApertura').innerText = `$${result.resumen.montoApertura.toLocaleString()} COP`;
+                document.getElementById('lblTotalIngresos').innerText = `$${result.resumen.totalIngresos.toLocaleString()} COP`;
+                document.getElementById('lblTotalEgresos').innerText = `$${result.resumen.totalEgresos.toLocaleString()} COP`;
+                document.getElementById('lblSaldoEsperado').innerText = `$${result.resumen.saldoEsperado.toLocaleString()} COP`;
+            } else {
+                boxStatus.innerHTML = `<span style="background:#fee2e2; color:#991b1b; padding:8px 12px; border-radius:6px; font-weight:bold;">● CAJA CERRADA</span>`;
+                document.getElementById('boxAbrirCaja').style.display = 'block';
+                document.getElementById('boxCajaAbierta').style.display = 'none';
+                document.getElementById('lblMontoApertura').innerText = `$0 COP`;
+                document.getElementById('lblTotalIngresos').innerText = `$0 COP`;
+                document.getElementById('lblTotalEgresos').innerText = `$0 COP`;
+                document.getElementById('lblSaldoEsperado').innerText = `$0 COP`;
+            }
+        }
+
+        async function abrirCaja() {
+            const monto = document.getElementById('montoApertura').value;
+            const res = await fetch('/api/caja/abrir', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ monto_apertura: parseFloat(monto) }) });
+            if(res.ok) cargarEstadoCaja();
+        }
+
+        async function registrarEgreso() {
+            const monto = document.getElementById('montoEgreso').value;
+            const concepto = document.getElementById('conceptoEgreso').value;
+            const res = await fetch('/api/caja/egreso', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ monto: parseFloat(monto), concepto }) });
+            if(res.ok) { document.getElementById('montoEgreso').value = ''; document.getElementById('conceptoEgreso').value = ''; cargarEstadoCaja(); }
+        }
+
+        async function cerrarCaja() {
+            const monto = document.getElementById('montoCierre').value;
+            const res = await fetch('/api/caja/cerrar', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ monto_cierre_efectivo: parseFloat(monto) }) });
+            const result = await res.json();
+            if(res.ok) {
+                alert(`Caja cerrada con éxito.\nSaldo esperado: $${result.resumen.saldoEsperado.toLocaleString()} COP\nEfectivo contado: $${result.resumen.efectivoContado.toLocaleString()} COP\nDiferencia: $${result.resumen.diferencia.toLocaleString()} COP`);
+                cargarEstadoCaja();
+            }
+        }
+
+        async function cargarDatosInsumos() {
+            const res = await fetch('/api/inventario/insumos');
+            const result = await res.json();
+            if(result.status === 'success') {
+                insumosCache = result.data;
+                document.getElementById('selectInsumo').innerHTML = `<option value="">-- Seleccione insumo --</option>` + insumosCache.map(i => `<option value="${i.id}">${i.nombre} (Stock: ${i.stock_actual} ${i.unidad_medida})</option>`).join('');
+                document.getElementById('insumosTableBody').innerHTML = insumosCache.map(i => `
+                    <tr>
+                        <td><strong>${i.nombre}</strong></td>
+                        <td>${i.unidad_medida}</td>
+                        <td><span style="${i.stock_actual <= i.stock_minimo ? 'color:#dc2626; font-weight:bold;' : 'color:#166534; font-weight:bold;'}">${i.stock_actual}</span></td>
+                        <td>${i.stock_minimo}</td>
+                    </tr>
+                `).join('');
+            }
+        }
+
+        async function registrarMovimientoInsumo(e) {
+            e.preventDefault();
+            const alertBox = document.getElementById('formAlertInsumo');
+            const mov = {
+                insumo_id: document.getElementById('selectInsumo').value,
+                tipo: document.getElementById('tipoMovInsumo').value,
+                cantidad: parseFloat(document.getElementById('cantInsumo').value),
+                motivo: document.getElementById('motivoInsumo').value
+            };
+            const res = await fetch('/api/inventario/movimiento', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(mov) });
+            const result = await res.json();
+            if(res.ok) {
+                alertBox.className = 'alert alert-success'; alertBox.innerText = 'Movimiento registrado con éxito.'; alertBox.style.display = 'block';
+                document.getElementById('movInsumoForm').reset(); cargarDatosInsumos();
+            } else {
+                alertBox.className = 'alert alert-error'; alertBox.innerText = result.message; alertBox.style.display = 'block';
+            }
+            setTimeout(() => alertBox.style.display = 'none', 3000);
+        }
+
+        async function cargarReportes() {
+            const ini = document.getElementById('filtroFechaInicio').value;
+            const fin = document.getElementById('filtroFechaFin').value;
+
+            const res = await fetch(`/api/caja/reporte-ventas?fecha_inicio=${ini}&fecha_fin=${fin}`);
+            const result = await res.json();
+
+            if(result.status === 'success') {
+                const r = result.resumen;
+                document.getElementById('repTotalPedidos').innerText = r.totalPedidos;
+                document.getElementById('repSubtotal').innerText = `$${r.totalSubtotal.toLocaleString()} COP`;
+                document.getElementById('repDescuentos').innerText = `-$${r.totalDescuentos.toLocaleString()} COP`;
+                document.getElementById('repTotalVendido').innerText = `$${r.totalVendido.toLocaleString()} COP`;
+                document.getElementById('repAbonos').innerText = `$${r.totalAbonosPedidos.toLocaleString()} COP`;
+                document.getElementById('repDineroCaja').innerText = `$${r.dineroRecibidoCaja.toLocaleString()} COP`;
+                document.getElementById('repSaldosPendientes').innerText = `$${r.totalSaldosPendientes.toLocaleString()} COP`;
+
+                const tbody = document.getElementById('repTopServiciosBody');
+                if(result.porServicio.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="3" style="text-align: center;">No hay ventas registradas en este rango de fechas.</td></tr>`;
+                    return;
+                }
+                tbody.innerHTML = result.porServicio.map(s => `
+                    <tr>
+                        <td><strong>${s.servicio_nombre}</strong></td>
+                        <td>${s.cantidad_total}</td>
+                        <td>$${s.recaudado.toLocaleString()} COP</td>
+                    </tr>
+                `).join('');
+            }
+        }
+
+        cargarClientes();
+    </script>
+</body>
+</html>
