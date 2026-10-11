@@ -1,5 +1,5 @@
 const express = require('express');
-const sqlite3 = require('sqlite3').verbose();
+const sqlite3 = sqlite3.verbose();
 const path = require('path');
 const cors = require('cors');
 
@@ -204,7 +204,7 @@ app.delete('/api/ordenes/servicios/:id', (req, res) => {
     });
 });
 
-// API Órdenes
+// API Órdenes (Consecutivo desde 0001)
 app.get('/api/ordenes', (req, res) => {
     const query = `
         SELECT o.*, c.nombre_completo as cliente_nombre, c.telefono as cliente_telefono 
@@ -219,7 +219,7 @@ app.get('/api/ordenes', (req, res) => {
 });
 
 app.post('/api/ordenes', (req, res) => {
-    const { cliente_id, items, abono, fecha_entrega_estimada, observaciones } = req.body;
+    const { cliente_id, items, abono, fecha_entrega_estimada, observations, observaciones } = req.body;
     if (!items || items.length === 0) {
         return res.status(400).json({ status: 'error', message: 'La orden debe contener al menos un servicio.' });
     }
@@ -227,39 +227,39 @@ app.post('/api/ordenes', (req, res) => {
     let total = items.reduce((acc, item) => acc + (parseFloat(item.subtotal_item) || 0), 0);
     let abonoNum = parseFloat(abono) || 0;
     let saldo = Math.max(0, total - abonoNum);
-    let codigoOrden = `ORD-${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, '0')}${String(new Date().getDate()).padStart(2, '0')}-${Math.floor(1000 + Math.random() * 9000)}`;
+    let obsGenerales = observaciones || observations || '';
 
     db.serialize(() => {
-        db.run('BEGIN TRANSACTION');
+        // Obtener el último ID registrado para calcular el consecutivo 0001
+        db.get(`SELECT MAX(id) as max_id FROM ordenes`, [], (err, row) => {
+            let nextId = (row && row.max_id) ? row.max_id + 1 : 1;
+            let codigoOrden = String(nextId).padStart(4, '0'); // Ej: 0001, 0002...
 
-        const queryOrden = `INSERT INTO ordenes (codigo_orden, cliente_id, total, abono, saldo, fecha_entrega_estimada, estado, ubicacion_fisica, observaciones) VALUES (?, ?, ?, ?, ?, ?, 'Recibido', 'Estantería Principal', ?)`;
-        
-        db.run(queryOrden, [codigoOrden, cliente_id || null, total, abonoNum, saldo, fecha_entrega_estimada, observaciones], function(err) {
-            if (err) {
-                db.run('ROLLBACK');
-                return res.status(500).json({ status: 'error', message: err.message });
-            }
-
-            const ordenId = this.lastID;
-            const queryItem = `INSERT INTO orden_items (orden_id, servicio_id, cantidad, precio_unitario, subtotal_item, observacion_prenda) VALUES (?, ?, ?, ?, ?, ?)`;
+            const queryOrden = `INSERT INTO ordenes (codigo_orden, cliente_id, total, abono, saldo, fecha_entrega_estimada, estado, ubicacion_fisica, observaciones) VALUES (?, ?, ?, ?, ?, ?, 'Recibido', 'Estantería Principal', ?)`;
             
-            let stmt = db.prepare(queryItem);
-            items.forEach(item => {
-                stmt.run([ordenId, item.servicio_id, item.cantidad, item.precio_unitario, item.subtotal_item, item.observacion_prenda || '']);
-            });
-            stmt.finalize();
+            db.run(queryOrden, [codigoOrden, cliente_id || null, total, abonoNum, saldo, fecha_entrega_estimada, obsGenerales], function(err) {
+                if (err) {
+                    return res.status(500).json({ status: 'error', message: err.message });
+                }
 
-            if (abonoNum > 0) {
-                db.get(`SELECT id FROM caja_turnos WHERE estado = 'ABIERTA' ORDER BY id DESC LIMIT 1`, [], (err, turno) => {
-                    if (turno) {
-                        db.run(`INSERT INTO caja_movimientos (turno_id, tipo, monto, concepto) VALUES (?, 'ABONO', ?, ?)`, 
-                            [turno.id, abonoNum, `Abono inicial orden ${codigoOrden}`]);
-                    }
+                const ordenId = this.lastID;
+                const queryItem = `INSERT INTO orden_items (orden_id, servicio_id, cantidad, precio_unitario, subtotal_item, observacion_prenda) VALUES (?, ?, ?, ?, ?, ?)`;
+                
+                let stmt = db.prepare(queryItem);
+                items.forEach(item => {
+                    stmt.run([ordenId, item.servicio_id, item.cantidad, item.precio_unitario, item.subtotal_item, item.observacion_prenda || '']);
                 });
-            }
+                stmt.finalize();
 
-            db.run('COMMIT', (err) => {
-                if (err) return res.status(500).json({ status: 'error', message: err.message });
+                if (abonoNum > 0) {
+                    db.get(`SELECT id FROM caja_turnos WHERE estado = 'ABIERTA' ORDER BY id DESC LIMIT 1`, [], (err, turno) => {
+                        if (turno) {
+                            db.run(`INSERT INTO caja_movimientos (turno_id, tipo, monto, concepto) VALUES (?, 'ABONO', ?, ?)`, 
+                                [turno.id, abonoNum, `Abono inicial orden ${codigoOrden}`]);
+                        }
+                    });
+                }
+
                 res.json({ status: 'success', message: 'Orden creada con éxito', ordenId, codigo_orden: codigoOrden });
             });
         });
@@ -322,7 +322,7 @@ app.delete('/api/ordenes/:id', (req, res) => {
     });
 });
 
-// WhatsApp Notificaciones (Distinción correcta entre Orden Recibida y Pedido Listo para Recoger)
+// WhatsApp Notificaciones
 app.get('/api/ordenes/:id/whatsapp', (req, res) => {
     const { id } = req.params;
     const qOrden = `
@@ -351,11 +351,10 @@ app.get('/api/ordenes/:id/whatsapp', (req, res) => {
             let mensaje = '';
             let estadoActual = (orden.estado || '').trim().toLowerCase();
 
-            // Validar si está listo para entrega o entregado
             if (estadoActual === 'listo para entrega' || estadoActual === 'entregado') {
-                mensaje = `🧺 LAVANDERÍA LAVATEX\n\n¡Hola ${orden.cliente_nombre}! Su orden *${orden.codigo_orden}* ya está lista para recoger.\n\n📋 Detalle de prendas:\n${detallePrendas}\n\n💰 Total a Pagar: $${Number(orden.total).toLocaleString('es-CO')} COP\n💵 Abono Inicial: $${Number(orden.abono).toLocaleString('es-CO')} COP\n🔴 Saldo Pendiente: $${Number(orden.saldo).toLocaleString('es-CO')} COP\n\n¡Lo esperamos!`;
+                mensaje = `🧺 LAVANDERÍA LAVATEX\n\n¡Hola ${orden.cliente_nombre}! Su recibo *${orden.codigo_orden}* ya está listo para recoger.\n\n📋 Detalle de prendas:\n${detallePrendas}\n\n💰 Total a Pagar: $${Number(orden.total).toLocaleString('es-CO')} COP\n💵 Abono Inicial: $${Number(orden.abono).toLocaleString('es-CO')} COP\n🔴 Saldo Pendiente: $${Number(orden.saldo).toLocaleString('es-CO')} COP\n\n¡Lo esperamos!`;
             } else {
-                mensaje = `🧺 LAVANDERÍA LAVATEX\n\n¡Hola ${orden.cliente_nombre}! Hemos recibido su pedido *${orden.codigo_orden}*.\n\n📋 Detalle de prendas:\n${detallePrendas}\n\n💰 Total a Pagar: $${Number(orden.total).toLocaleString('es-CO')} COP\n💵 Abono Inicial: $${Number(orden.abono).toLocaleString('es-CO')} COP\n🔴 Saldo Pendiente: $${Number(orden.saldo).toLocaleString('es-CO')} COP\n\n¡Gracias por su preferencia!`;
+                mensaje = `🧺 LAVANDERÍA LAVATEX\n\n¡Hola ${orden.cliente_nombre}! Hemos recibido su recibo *${orden.codigo_orden}*.\n\n📋 Detalle de prendas:\n${detallePrendas}\n\n💰 Total a Pagar: $${Number(orden.total).toLocaleString('es-CO')} COP\n💵 Abono Inicial: $${Number(orden.abono).toLocaleString('es-CO')} COP\n🔴 Saldo Pendiente: $${Number(orden.saldo).toLocaleString('es-CO')} COP\n\n¡Gracias por su preferencia!`;
             }
 
             let urlWhatsapp = `https://api.whatsapp.com/send?phone=57${telefonoLimpio}&text=${encodeURIComponent(mensaje)}`;

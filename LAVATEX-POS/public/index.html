@@ -178,7 +178,7 @@
                             <div class="resumen-row" style="color: #dc2626; font-weight: bold;"><span>Saldo Pendiente:</span><span id="lblSaldo">$0 COP</span></div>
                         </div>
 
-                        <button type="submit" id="btnCrearOrden" class="btn" style="margin-top: 15px;">Generar Orden y Ver Ticket</button>
+                        <button type="submit" id="btnCrearOrden" class="btn" style="margin-top: 15px;">Generar Orden y Ver Recibo</button>
                     </form>
                 </div>
 
@@ -186,7 +186,7 @@
                     <h2>Órdenes Recientes</h2>
                     <div class="table-container">
                         <table>
-                            <thead><tr><th>N° Orden</th><th>Cliente</th><th>Total</th><th>Acción</th></tr></thead>
+                            <thead><tr><th>N° Recibo</th><th>Cliente</th><th>Total</th><th>Acción</th></tr></thead>
                             <tbody id="ordersTableBody"><tr><td colspan="4" style="text-align: center;">Cargando...</td></tr></tbody>
                         </table>
                     </div>
@@ -198,12 +198,12 @@
         <div id="vista-seguimiento" class="section-view">
             <div class="card">
                 <h2>Control de Estados, Ubicación y Notificaciones</h2>
-                <div class="form-group"><input type="text" id="searchTracking" class="form-control" placeholder="Buscar por número de orden o nombre de cliente..." onkeyup="filtrarTracking()"></div>
+                <div class="form-group"><input type="text" id="searchTracking" class="form-control" placeholder="Buscar por número de recibo (ej. 0001) o nombre de cliente..." onkeyup="filtrarTracking()"></div>
                 <div class="table-container">
                     <table>
                         <thead>
                             <tr>
-                                <th>N° Orden</th>
+                                <th>N° Recibo</th>
                                 <th>Cliente</th>
                                 <th>Estado Actual</th>
                                 <th>Ubicación Física</th>
@@ -652,7 +652,7 @@
             }
 
             btnCrear.disabled = true;
-            btnCrear.innerText = 'Generando orden...';
+            btnCrear.innerText = 'Generando recibo...';
 
             const nuevaOrden = {
                 cliente_id: clienteId,
@@ -672,7 +672,7 @@
 
                 if(res.ok) {
                     alertBox.className = 'alert alert-success'; 
-                    alertBox.innerText = `¡Orden ${result.codigo_orden} creada!`; 
+                    alertBox.innerText = `¡Recibo N° ${result.codigo_orden} creado!`; 
                     alertBox.style.display = 'block';
                     
                     itemsOrdenActual = []; 
@@ -684,7 +684,7 @@
                     verTicket(result.ordenId);
                 } else { 
                     alertBox.className = 'alert alert-error'; 
-                    alertBox.innerText = result.message || 'Error al generar la orden.'; 
+                    alertBox.innerText = result.message || 'Error al generar el recibo.'; 
                     alertBox.style.display = 'block'; 
                 }
             } catch (error) {
@@ -693,7 +693,7 @@
                 alertBox.style.display = 'block';
             } finally {
                 btnCrear.disabled = false;
-                btnCrear.innerText = 'Generar Orden y Ver Ticket';
+                btnCrear.innerText = 'Generar Orden y Ver Recibo';
                 setTimeout(() => alertBox.style.display = 'none', 4000);
             }
         }
@@ -710,7 +710,7 @@
                         <td>${o.cliente_nombre || 'General'}</td>
                         <td>$${formatoMoneda(o.total)} COP</td>
                         <td>
-                            <button onclick="verTicket(${o.id})" style="background:#0284c7; color:white; border:none; padding:4px 8px; border-radius:4px; cursor:pointer;">🧾 Ticket</button>
+                            <button onclick="verTicket(${o.id})" style="background:#0284c7; color:white; border:none; padding:4px 8px; border-radius:4px; cursor:pointer;">🧾 Recibo</button>
                             <button onclick="enviarWhatsapp(${o.id})" class="btn-wa">📲 WA</button>
                             <button onclick="eliminarOrden(${o.id})" class="btn-danger" style="margin-left:4px;">🗑️</button>
                         </td>
@@ -757,17 +757,21 @@
                         <input type="text" id="ubicacion_${o.id}" class="form-control" value="${o.ubicacion_fisica || 'Estantería Principal'}" style="padding:4px;">
                     </td>
                     <td>
-                        <button onclick="actualizarTracking(${o.id})" style="background:#166534; color:white; border:none; padding:6px 10px; border-radius:4px; cursor:pointer; font-weight:bold;">Guardar</button>
-                        <button onclick="enviarWhatsapp(${o.id})" class="btn-wa" style="margin-left:4px;">📲 Notificar</button>
-                        <button onclick="eliminarOrden(${o.id})" class="btn-danger" style="margin-left:4px;">🗑️</button>
+                        <button onclick="verTicket(${o.id})" style="background:#0284c7; color:white; border:none; padding:6px 10px; border-radius:4px; cursor:pointer; font-weight:bold; margin-right:4px;">🧾 Recibo</button>
+                        <button onclick="actualizarTracking(${o.id})" style="background:#166534; color:white; border:none; padding:6px 10px; border-radius:4px; cursor:pointer; font-weight:bold; margin-right:4px;">Guardar</button>
+                        <button onclick="enviarWhatsapp(${o.id})" class="btn-wa" style="margin-right:4px;">📲 Notificar</button>
+                        <button onclick="eliminarOrden(${o.id})" class="btn-danger">🗑️</button>
                     </td>
                 </tr>
             `).join('');
         }
 
         function filtrarTracking() {
-            const texto = document.getElementById('searchTracking').value.toLowerCase();
-            const filtrados = ordenesCache.filter(o => o.codigo_orden.toLowerCase().includes(texto) || (o.cliente_nombre && o.cliente_nombre.toLowerCase().includes(texto)));
+            const texto = document.getElementById('searchTracking').value.toLowerCase().trim();
+            const filtrados = ordenesCache.filter(o => 
+                o.codigo_orden.toLowerCase().includes(texto) || 
+                (o.cliente_nombre && o.cliente_nombre.toLowerCase().includes(texto))
+            );
             renderizarTablaTracking(filtrados);
         }
 
@@ -800,6 +804,20 @@
         }
 
         async function enviarWhatsapp(ordenId) {
+            const selectEstado = document.getElementById(`estado_${ordenId}`);
+            const inputUbicacion = document.getElementById(`ubicacion_${ordenId}`);
+            
+            if(selectEstado && inputUbicacion) {
+                let estadoActual = selectEstado.value;
+                let ubicacionActual = inputUbicacion.value;
+                
+                await fetch(`/api/ordenes/${ordenId}/estado`, {
+                    method: 'PUT',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ estado: estadoActual, ubicacion_fisica: ubicacionActual, abonar_adicional: 0 })
+                });
+            }
+
             const res = await fetch(`/api/ordenes/${ordenId}/whatsapp`);
             const result = await res.json();
             if(result.status === 'success') {
@@ -814,7 +832,7 @@
             const result = await res.json();
             if(result.status === 'success') {
                 const t = result.ticket;
-                document.getElementById('t_codigo').innerText = t.orden.codigo_orden;
+                document.getElementById('t_codigo').innerText = `Recibo N° ${t.orden.codigo_orden}`;
                 document.getElementById('t_fecha').innerText = new Date(t.orden.fecha_recepcion).toLocaleString();
                 document.getElementById('t_cliente').innerText = `Cliente: ${t.orden.cliente_nombre || 'General'}\nCédula: ${t.orden.cliente_cedula || 'N/A'}\nTel: ${t.orden.cliente_telefono || 'N/A'}`;
                 document.getElementById('t_items').innerHTML = t.items.map(i => `<p>${i.cantidad}x ${i.servicio_nombre}${i.observacion_prenda ? ' ('+i.observacion_prenda+')' : ''} = $${formatoMoneda(i.subtotal_item)} COP</p>`).join('');
