@@ -8,8 +8,21 @@ if (process.env.TURSO_DATABASE_URL) {
     if (!tursoUrl.endsWith('/')) tursoUrl += '/';
     const authToken = process.env.TURSO_AUTH_TOKEN;
 
-    // Función optimizada para enviar consultas HTTP directas a Turso
+    // Función robusta con tipado estricto para Turso HTTP
     async function tursoQuery(sql, params = []) {
+        // Mapeo estricto de tipos requerido por la API HTTP de Turso v2
+        const formattedParams = params.map(p => {
+            if (p === null || p === undefined) {
+                return { type: 'null' };
+            } else if (typeof p === 'number') {
+                return { type: Number.isInteger(p) ? 'integer' : 'float', value: p.toString() };
+            } else if (typeof p === 'boolean') {
+                return { type: 'integer', value: p ? '1' : '0' };
+            } else {
+                return { type: 'text', value: p.toString() };
+            }
+        });
+
         const response = await fetch(`${tursoUrl}v2/pipeline`, {
             method: 'POST',
             headers: {
@@ -19,7 +32,7 @@ if (process.env.TURSO_DATABASE_URL) {
             body: JSON.stringify({ 
                 requests: [{ 
                     type: 'execute', 
-                    stmt: { sql, params: params.map(p => p === undefined ? null : p) } 
+                    stmt: { sql, params: formattedParams } 
                 }] 
             })
         });
@@ -162,7 +175,7 @@ if (process.env.TURSO_DATABASE_URL) {
                 FOREIGN KEY (insumo_id) REFERENCES insumos(id)
             )`);
 
-            console.log('¡Tablas de Turso verificadas e inicializadas correctamente vía HTTP!');
+            console.log('¡Tablas verificadas en Turso con tipado estricto!');
         } catch (e) {
             console.error('Error al inicializar tablas en Turso:', e.message);
         }
@@ -170,7 +183,7 @@ if (process.env.TURSO_DATABASE_URL) {
 
     inicializarTablasTurso();
 
-    // Adaptador de compatibilidad idéntico a sqlite3
+    // Adaptador de compatibilidad
     db = {
         run: function(sql, params = [], callback) {
             if (typeof params === 'function') {
@@ -228,9 +241,8 @@ if (process.env.TURSO_DATABASE_URL) {
             };
         }
     };
-    console.log('Adaptador Turso HTTP Puro inicializado correctamente.');
+    console.log('Adaptador Turso HTTP con tipado estricto activo.');
 } else {
-    // Entorno local SQLite tradicional
     const dbPath = path.resolve(__dirname, '../../lavatex_pos.db');
     db = new sqlite3.Database(dbPath, (err) => {
         if (err) {
