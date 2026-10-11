@@ -1,7 +1,6 @@
 const express = require('express');
-const sqlite3 = require('sqlite3').verbose();
+const { createClient } = require('@libsql/client');
 const path = require('path');
-const fs = require('fs');
 const cors = require('cors');
 
 const app = express();
@@ -17,27 +16,20 @@ app.get('/', (req, res) => {
     res.sendFile(path.join(publicPath, 'index.html'));
 });
 
-// Ruta persistente segura en Render o entorno local
-// Si Render tiene un disco persistente montado en /opt/render/project/data, lo usaremos ahí. Si no, usamos la ruta general.
-let dirBaseDatos = path.join(__dirname, '../');
-if (fs.existsSync('/opt/render/project/data')) {
-    dirBaseDatos = '/opt/render/project/data/';
-}
-const dbPath = path.join(dirBaseDatos, 'lavatex_pos.db');
-
-const db = new sqlite3.Database(dbPath, (err) => {
-    if (err) {
-        console.error('Error al conectar con la base de datos SQLite:', err.message);
-    } else {
-        console.log('Conectado a la base de datos SQLite persistente en:', dbPath);
-        inicializarBaseDatos();
-    }
+// Conexión a Turso Cloud (usando variables de entorno o respaldos locales si estás offline en desarrollo)
+const db = createClient({
+    url: process.env.TURSO_DATABASE_URL || "file:lavatex_pos.db",
+    authUrl: process.env.TURSO_AUTH_TOKEN ? undefined : undefined,
+    authToken: process.env.TURSO_AUTH_TOKEN || undefined
 });
 
-// Inicializar Tablas sin destruir información existente de clientes ni órdenes
-function inicializarBaseDatos() {
-    db.serialize(() => {
-        db.run(`CREATE TABLE IF NOT EXISTS clientes (
+console.log('Conectado a la base de datos en Turso Cloud.');
+inicializarBaseDatos();
+
+// Inicializar Tablas en Turso
+async function inicializarBaseDatos() {
+    try {
+        await db.execute(`CREATE TABLE IF NOT EXISTS clientes (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             nombre_completo TEXT NOT NULL,
             telefono TEXT NOT NULL,
@@ -46,7 +38,7 @@ function inicializarBaseDatos() {
             correo TEXT
         )`);
 
-        db.run(`CREATE TABLE IF NOT EXISTS servicios (
+        await db.execute(`CREATE TABLE IF NOT EXISTS servicios (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             codigo TEXT,
             nombre TEXT NOT NULL,
@@ -55,24 +47,27 @@ function inicializarBaseDatos() {
             precio REAL NOT NULL,
             tiempo_estimado_horas INTEGER DEFAULT 24,
             activo INTEGER DEFAULT 1
-        )`, () => {
-            db.get(`SELECT COUNT(*) as count FROM servicios`, [], (err, row) => {
-                if (row && row.count === 0) {
-                    const serviciosIniciales = [
-                        ['CUB', 'CUBRELECHO', 'Lavado y desinfección de cubrecama', 'unidad', 20000, 24],
-                        ['PH', 'PANTALON HOMBRE', 'Lavado y planchado', 'unidad', 8000, 24],
-                        ['CH', 'CAMISA HOMBRE', 'Lavado y planchado', 'unidad', 7000, 24],
-                        ['JNB', 'JEAN / PANTALON', 'Lavado en seco / agua', 'unidad', 9000, 24],
-                        ['COB', 'COBIJA / FRAZADA', 'Lavado profundo', 'unidad', 15000, 24]
-                    ];
-                    const stmt = db.prepare(`INSERT INTO servicios (codigo, nombre, descripcion, unidad_cobro, precio, tiempo_estimado_horas, activo) VALUES (?, ?, ?, ?, ?, ?, 1)`);
-                    serviciosIniciales.forEach(s => stmt.run(s));
-                    stmt.finalize();
-                }
-            });
-        });
+        )`);
 
-        db.run(`CREATE TABLE IF NOT EXISTS ordenes (
+        // Verificar si hay servicios iniciales
+        const resServ = await db.execute(`SELECT COUNT(*) as count FROM servicios`);
+        if (resServ.rows[0].count === 0) {
+            const serviciosIniciales = [
+                ['CUB', 'CUBRELECHO', 'Lavado y desinfección de cubrecama', 'unidad', 20000, 24],
+                ['PH', 'PANTALON HOMBRE', 'Lavado y planchado', 'unidad', 8000, 24],
+                ['CH', 'CAMISA HOMBRE', 'Lavado y planchado', 'unidad', 7000, 24],
+                ['JNB', 'JEAN / PANTALON', 'Lavado en seco / agua', 'unidad', 9000, 24],
+                ['COB', 'COBIJA / FRAZADA', 'Lavado profundo', 'unidad', 15000, 24]
+            ];
+            for (let s of serviciosIniciales) {
+                await db.execute({
+                    sql: `INSERT INTO servicios (codigo, nombre, descripcion, unidad_cobro, precio, tiempo_estimado_horas, activo) VALUES (?, ?, ?, ?, ?, ?, 1)`,
+                    args: s
+                });
+            }
+        }
+
+        await db.execute(`CREATE TABLE IF NOT EXISTS ordenes (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             codigo_orden TEXT UNIQUE NOT NULL,
             cliente_id INTEGER,
@@ -87,7 +82,7 @@ function inicializarBaseDatos() {
             FOREIGN KEY(cliente_id) REFERENCES clientes(id)
         )`);
 
-        db.run(`CREATE TABLE IF NOT EXISTS orden_items (
+        await db.execute(`CREATE TABLE IF NOT EXISTS orden_items (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             orden_id INTEGER,
             servicio_id INTEGER,
@@ -99,7 +94,7 @@ function inicializarBaseDatos() {
             FOREIGN KEY(servicio_id) REFERENCES servicios(id)
         )`);
 
-        db.run(`CREATE TABLE IF NOT EXISTS caja_turnos (
+        await db.execute(`CREATE TABLE IF NOT EXISTS caja_turnos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             monto_apertura REAL NOT NULL,
             fecha_apertura DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -110,7 +105,7 @@ function inicializarBaseDatos() {
             estado TEXT DEFAULT 'ABIERTA'
         )`);
 
-        db.run(`CREATE TABLE IF NOT EXISTS caja_movimientos (
+        await db.execute(`CREATE TABLE IF NOT EXISTS caja_movimientos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             turno_id INTEGER,
             tipo TEXT,
@@ -120,7 +115,7 @@ function inicializarBaseDatos() {
             FOREIGN KEY(turno_id) REFERENCES caja_turnos(id)
         )`);
 
-        db.run(`CREATE TABLE IF NOT EXISTS insumos (
+        await db.execute(`CREATE TABLE IF NOT EXISTS insumos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             nombre TEXT NOT NULL,
             unidad_medida TEXT NOT NULL,
@@ -128,7 +123,7 @@ function inicializarBaseDatos() {
             stock_minimo REAL DEFAULT 5
         )`);
 
-        db.run(`CREATE TABLE IF NOT EXISTS insumo_movimientos (
+        await db.execute(`CREATE TABLE IF NOT EXISTS insumo_movimientos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             insumo_id INTEGER,
             tipo TEXT,
@@ -137,92 +132,118 @@ function inicializarBaseDatos() {
             fecha DATETIME DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY(insumo_id) REFERENCES insumos(id)
         )`);
-    });
+
+        console.log('Tablas inicializadas correctamente en Turso.');
+    } catch (e) {
+        console.error('Error al inicializar la base de datos en Turso:', e.message);
+    }
 }
 
 // API Clientes
-app.get('/api/clientes', (req, res) => {
-    db.all(`SELECT * FROM clientes ORDER BY id DESC`, [], (err, rows) => {
-        if (err) return res.status(500).json({ status: 'error', message: err.message });
-        res.json({ status: 'success', data: rows });
-    });
+app.get('/api/clientes', async (req, res) => {
+    try {
+        const result = await db.execute(`SELECT * FROM clientes ORDER BY id DESC`);
+        res.json({ status: 'success', data: result.rows });
+    } catch (err) {
+        res.status(500).json({ status: 'error', message: err.message });
+    }
 });
 
-app.post('/api/clientes', (req, res) => {
+app.post('/api/clientes', async (req, res) => {
     const { nombre_completo, telefono, numero_identificacion, direccion, correo } = req.body;
     if (!nombre_completo || !telefono) {
         return res.status(400).json({ status: 'error', message: 'Nombre y teléfono son obligatorios.' });
     }
-    const query = `INSERT INTO clientes (nombre_completo, telefono, numero_identificacion, direccion, correo) VALUES (?, ?, ?, ?, ?)`;
-    db.run(query, [nombre_completo, telefono, numero_identificacion, direccion, correo], function(err) {
-        if (err) return res.status(500).json({ status: 'error', message: err.message });
-        res.json({ status: 'success', message: 'Cliente registrado con éxito', id: this.lastID });
-    });
+    try {
+        const result = await db.execute({
+            sql: `INSERT INTO clientes (nombre_completo, telefono, numero_identificacion, direccion, correo) VALUES (?, ?, ?, ?, ?)`,
+            args: [nombre_completo, telefono, numero_identificacion, direccion, correo]
+        });
+        res.json({ status: 'success', message: 'Cliente registrado con éxito', id: Number(result.lastInsertRowid) });
+    } catch (err) {
+        res.status(500).json({ status: 'error', message: err.message });
+    }
 });
 
-app.delete('/api/clientes/:id', (req, res) => {
+app.delete('/api/clientes/:id', async (req, res) => {
     const { id } = req.params;
-    db.run(`DELETE FROM clientes WHERE id = ?`, [id], function(err) {
-        if (err) return res.status(500).json({ status: 'error', message: err.message });
+    try {
+        await db.execute({ sql: `DELETE FROM clientes WHERE id = ?`, args: [id] });
         res.json({ status: 'success', message: 'Cliente eliminado correctamente' });
-    });
+    } catch (err) {
+        res.status(500).json({ status: 'error', message: err.message });
+    }
 });
 
 // API Servicios
-app.get('/api/ordenes/servicios', (req, res) => {
+app.get('/api/ordenes/servicios', async (req, res) => {
     const admin = req.query.admin;
     let query = `SELECT * FROM servicios`;
     if (!admin) query += ` WHERE activo = 1`;
     query += ` ORDER BY nombre ASC`;
 
-    db.all(query, [], (err, rows) => {
-        if (err) return res.status(500).json({ status: 'error', message: err.message });
-        res.json({ status: 'success', data: rows });
-    });
+    try {
+        const result = await db.execute(query);
+        res.json({ status: 'success', data: result.rows });
+    } catch (err) {
+        res.status(500).json({ status: 'error', message: err.message });
+    }
 });
 
-app.post('/api/ordenes/servicios', (req, res) => {
+app.post('/api/ordenes/servicios', async (req, res) => {
     const { codigo, nombre, descripcion, unidad_cobro, precio, tiempo_estimado_horas } = req.body;
-    const query = `INSERT INTO servicios (codigo, nombre, descripcion, unidad_cobro, precio, tiempo_estimado_horas, activo) VALUES (?, ?, ?, ?, ?, ?, 1)`;
-    db.run(query, [codigo, nombre, descripcion, unidad_cobro, precio, tiempo_estimado_horas || 24], function(err) {
-        if (err) return res.status(500).json({ status: 'error', message: err.message });
-        res.json({ status: 'success', message: 'Servicio registrado con éxito', id: this.lastID });
-    });
+    try {
+        const result = await db.execute({
+            sql: `INSERT INTO servicios (codigo, nombre, descripcion, unidad_cobro, precio, tiempo_estimado_horas, activo) VALUES (?, ?, ?, ?, ?, ?, 1)`,
+            args: [codigo, nombre, descripcion, unidad_cobro, precio, tiempo_estimado_horas || 24]
+        });
+        res.json({ status: 'success', message: 'Servicio registrado con éxito', id: Number(result.lastInsertRowid) });
+    } catch (err) {
+        res.status(500).json({ status: 'error', message: err.message });
+    }
 });
 
-app.put('/api/ordenes/servicios/:id', (req, res) => {
+app.put('/api/ordenes/servicios/:id', async (req, res) => {
     const { id } = req.params;
     const { codigo, nombre, descripcion, unidad_cobro, precio, tiempo_estimado_horas, activo } = req.body;
-    const query = `UPDATE servicios SET codigo = ?, nombre = ?, descripcion = ?, unidad_cobro = ?, precio = ?, tiempo_estimado_horas = ?, activo = ? WHERE id = ?`;
-    db.run(query, [codigo, nombre, descripcion, unidad_cobro, precio, tiempo_estimado_horas, activo, id], function(err) {
-        if (err) return res.status(500).json({ status: 'error', message: err.message });
+    try {
+        await db.execute({
+            sql: `UPDATE servicios SET codigo = ?, nombre = ?, descripcion = ?, unidad_cobro = ?, precio = ?, tiempo_estimado_horas = ?, activo = ? WHERE id = ?`,
+            args: [codigo, nombre, descripcion, unidad_cobro, precio, tiempo_estimado_horas, activo, id]
+        });
         res.json({ status: 'success', message: 'Servicio actualizado correctamente' });
-    });
+    } catch (err) {
+        res.status(500).json({ status: 'error', message: err.message });
+    }
 });
 
-app.delete('/api/ordenes/servicios/:id', (req, res) => {
+app.delete('/api/ordenes/servicios/:id', async (req, res) => {
     const { id } = req.params;
-    db.run(`UPDATE servicios SET activo = 0 WHERE id = ?`, [id], function(err) {
-        if (err) return res.status(500).json({ status: 'error', message: err.message });
+    try {
+        await db.execute({ sql: `UPDATE servicios SET activo = 0 WHERE id = ?`, args: [id] });
         res.json({ status: 'success', message: 'Servicio desactivado para proteger el historial histórico.' });
-    });
+    } catch (err) {
+        res.status(500).json({ status: 'error', message: err.message });
+    }
 });
 
 // API Órdenes
-app.get('/api/ordenes', (req, res) => {
+app.get('/api/ordenes', async (req, res) => {
     const query = `
         SELECT o.*, c.nombre_completo as cliente_nombre, c.telefono as cliente_telefono, c.numero_identificacion as cliente_cedula 
         FROM ordenes o 
         LEFT JOIN clientes c ON o.cliente_id = c.id 
         ORDER BY o.id DESC
     `;
-    db.all(query, [], (err, rows) => {
-        if (err) return res.status(500).json({ status: 'error', message: err.message });
-        res.json({ status: 'success', data: rows });
-    });
+    try {
+        const result = await db.execute(query);
+        res.json({ status: 'success', data: result.rows });
+    } catch (err) {
+        res.status(500).json({ status: 'error', message: err.message });
+    }
 });
 
-app.post('/api/ordenes', (req, res) => {
+app.post('/api/ordenes', async (req, res) => {
     const { cliente_id, items, abono, fecha_entrega_estimada, observaciones } = req.body;
     if (!items || items.length === 0) {
         return res.status(400).json({ status: 'error', message: 'La orden debe contener al menos un servicio.' });
@@ -233,219 +254,234 @@ app.post('/api/ordenes', (req, res) => {
     let saldo = Math.max(0, total - abonoNum);
     let obsGenerales = observaciones || '';
 
-    // Obtener la fecha y hora exacta actual de Colombia (Bogotá)
     const fechaHoraColombia = new Date().toLocaleString('en-US', { timeZone: 'America/Bogota' });
     const fechaRecepcionLocal = new Date(fechaHoraColombia).toISOString().slice(0, 19).replace('T', ' ');
 
-    db.serialize(() => {
-        db.get(`SELECT MAX(id) as max_id FROM ordenes`, [], (err, row) => {
-            let nextId = (row && row.max_id) ? row.max_id + 1 : 1;
-            let codigoOrden = String(nextId).padStart(4, '0');
+    try {
+        const maxRow = await db.execute(`SELECT MAX(id) as max_id FROM ordenes`);
+        let nextId = (maxRow.rows[0] && maxRow.rows[0].max_id) ? maxRow.rows[0].max_id + 1 : 1;
+        let codigoOrden = String(nextId).padStart(4, '0');
 
-            const queryOrden = `INSERT INTO ordenes (codigo_orden, cliente_id, total, abono, saldo, fecha_recepcion, fecha_entrega_estimada, estado, ubicacion_fisica, observaciones) VALUES (?, ?, ?, ?, ?, ?, ?, 'Recibido', 'Estantería Principal', ?)`;
-            
-            db.run(queryOrden, [codigoOrden, cliente_id || null, total, abonoNum, saldo, fechaRecepcionLocal, fecha_entrega_estimada, obsGenerales], function(err) {
-                if (err) {
-                    return res.status(500).json({ status: 'error', message: err.message });
-                }
-
-                const ordenId = this.lastID;
-                const queryItem = `INSERT INTO orden_items (orden_id, servicio_id, cantidad, precio_unitario, subtotal_item, observacion_prenda) VALUES (?, ?, ?, ?, ?, ?)`;
-                
-                let stmt = db.prepare(queryItem);
-                items.forEach(item => {
-                    stmt.run([ordenId, item.servicio_id, item.cantidad, item.precio_unitario, item.subtotal_item, item.observacion_prenda || '']);
-                });
-                stmt.finalize();
-
-                if (abonoNum > 0) {
-                    db.get(`SELECT id FROM caja_turnos WHERE estado = 'ABIERTA' ORDER BY id DESC LIMIT 1`, [], (err, turno) => {
-                        if (turno) {
-                            db.run(`INSERT INTO caja_movimientos (turno_id, tipo, monto, concepto) VALUES (?, 'ABONO', ?, ?)`, 
-                                [turno.id, abonoNum, `Abono inicial recibo ${codigoOrden}`]);
-                        }
-                    });
-                }
-
-                res.json({ status: 'success', message: 'Orden creada con éxito', ordenId, codigo_orden: codigoOrden });
-            });
+        const queryOrden = `INSERT INTO ordenes (codigo_orden, cliente_id, total, abono, saldo, fecha_recepcion, fecha_entrega_estimada, estado, ubicacion_fisica, observaciones) VALUES (?, ?, ?, ?, ?, ?, ?, 'Recibido', 'Estantería Principal', ?)`;
+        
+        const resOrden = await db.execute({
+            sql: queryOrden,
+            args: [codigoOrden, cliente_id || null, total, abonoNum, saldo, fechaRecepcionLocal, fecha_entrega_estimada, obsGenerales]
         });
-    });
+
+        const ordenId = Number(resOrden.lastInsertRowid);
+
+        for (let item of items) {
+            await db.execute({
+                sql: `INSERT INTO orden_items (orden_id, servicio_id, cantidad, precio_unitario, subtotal_item, observacion_prenda) VALUES (?, ?, ?, ?, ?, ?)`,
+                args: [ordenId, item.servicio_id, item.cantidad, item.precio_unitario, item.subtotal_item, item.observacion_prenda || '']
+            });
+        }
+
+        if (abonoNum > 0) {
+            const turnoRes = await db.execute(`SELECT id FROM caja_turnos WHERE estado = 'ABIERTA' ORDER BY id DESC LIMIT 1`);
+            if (turnoRes.rows.length > 0) {
+                await db.execute({
+                    sql: `INSERT INTO caja_movimientos (turno_id, tipo, monto, concepto) VALUES (?, 'ABONO', ?, ?)`,
+                    args: [turnoRes.rows[0].id, abonoNum, `Abono inicial recibo ${codigoOrden}`]
+                });
+            }
+        }
+
+        res.json({ status: 'success', message: 'Orden creada con éxito', ordenId, codigo_orden: codigoOrden });
+    } catch (err) {
+        res.status(500).json({ status: 'error', message: err.message });
+    }
 });
 
-app.put('/api/ordenes/:id/estado', (req, res) => {
+app.put('/api/ordenes/:id/estado', async (req, res) => {
     const { id } = req.params;
     const { estado, ubicacion_fisica, abonar_adicional } = req.body;
 
-    db.serialize(() => {
-        db.run('BEGIN TRANSACTION');
+    try {
+        const ordenRes = await db.execute({ sql: `SELECT * FROM ordenes WHERE id = ?`, args: [id] });
+        if (ordenRes.rows.length === 0) return res.status(404).json({ status: 'error', message: 'Orden no encontrada' });
+        
+        const orden = ordenRes.rows[0];
+        let nuevoAbono = orden.abono + (parseFloat(abonar_adicional) || 0);
+        let nuevoSaldo = Math.max(0, orden.total - nuevoAbono);
 
-        db.get(`SELECT * FROM ordenes WHERE id = ?`, [id], (err, orden) => {
-            if (err || !orden) {
-                db.run('ROLLBACK');
-                return res.status(404).json({ status: 'error', message: 'Orden no encontrada' });
-            }
-
-            let nuevoAbono = orden.abono + (parseFloat(abonar_adicional) || 0);
-            let nuevoSaldo = Math.max(0, orden.total - nuevoAbono);
-
-            db.run(`UPDATE ordenes SET estado = ?, ubicacion_fisica = ?, abono = ?, saldo = ? WHERE id = ?`,
-                [estado, ubicacion_fisica, nuevoAbono, nuevoSaldo, id], function(err) {
-                    if (err) {
-                        db.run('ROLLBACK');
-                        return res.status(500).json({ status: 'error', message: err.message });
-                    }
-
-                    if (abonar_adicional > 0) {
-                        db.get(`SELECT id FROM caja_turnos WHERE estado = 'ABIERTA' ORDER BY id DESC LIMIT 1`, [], (err, turno) => {
-                            if (turno) {
-                                db.run(`INSERT INTO caja_movimientos (turno_id, tipo, monto, concepto) VALUES (?, 'ABONO', ?, ?)`, 
-                                    [turno.id, abonar_adicional, `Pago saldo recibo ${orden.codigo_orden}`]);
-                            }
-                        });
-                    }
-
-                    db.run('COMMIT', (err) => {
-                        if (err) return res.status(500).json({ status: 'error', message: err.message });
-                        res.json({ status: 'success', message: 'Estado de orden actualizado correctamente' });
-                    });
-                });
+        await db.execute({
+            sql: `UPDATE ordenes SET estado = ?, ubicacion_fisica = ?, abono = ?, saldo = ? WHERE id = ?`,
+            args: [estado, ubicacion_fisica, nuevoAbono, nuevoSaldo, id]
         });
-    });
+
+        if (abonar_adicional > 0) {
+            const turnoRes = await db.execute(`SELECT id FROM caja_turnos WHERE estado = 'ABIERTA' ORDER BY id DESC LIMIT 1`);
+            if (turnoRes.rows.length > 0) {
+                await db.execute({
+                    sql: `INSERT INTO caja_movimientos (turno_id, tipo, monto, concepto) VALUES (?, 'ABONO', ?, ?)`,
+                    args: [turnoRes.rows[0].id, abonar_adicional, `Pago saldo recibo ${orden.codigo_orden}`]
+                });
+            }
+        }
+
+        res.json({ status: 'success', message: 'Estado de orden actualizado correctamente' });
+    } catch (err) {
+        res.status(500).json({ status: 'error', message: err.message });
+    }
 });
 
-app.delete('/api/ordenes/:id', (req, res) => {
+app.delete('/api/ordenes/:id', async (req, res) => {
     const { id } = req.params;
-    db.serialize(() => {
-        db.run('BEGIN TRANSACTION');
-        db.run(`DELETE FROM orden_items WHERE orden_id = ?`, [id], (err) => {
-            if (err) { db.run('ROLLBACK'); return res.status(500).json({ status: 'error', message: err.message }); }
-            db.run(`DELETE FROM ordenes WHERE id = ?`, [id], (err) => {
-                if (err) { db.run('ROLLBACK'); return res.status(500).json({ status: 'error', message: err.message }); }
-                db.run('COMMIT');
-                res.json({ status: 'success', message: 'Orden eliminada con éxito' });
-            });
-        });
-    });
+    try {
+        await db.execute({ sql: `DELETE FROM orden_items WHERE orden_id = ?`, args: [id] });
+        await db.execute({ sql: `DELETE FROM ordenes WHERE id = ?`, args: [id] });
+        res.json({ status: 'success', message: 'Orden eliminada con éxito' });
+    } catch (err) {
+        res.status(500).json({ status: 'error', message: err.message });
+    }
 });
 
 // WhatsApp Notificaciones
-app.get('/api/ordenes/:id/whatsapp', (req, res) => {
+app.get('/api/ordenes/:id/whatsapp', async (req, res) => {
     const { id } = req.params;
-    const qOrden = `
-        SELECT o.*, c.nombre_completo as cliente_nombre, c.telefono as cliente_telefono 
-        FROM ordenes o 
-        LEFT JOIN clientes c ON o.cliente_id = c.id 
-        WHERE o.id = ?
-    `;
-    db.get(qOrden, [id], (err, orden) => {
-        if (err || !orden) return res.status(404).json({ status: 'error', message: 'Orden no encontrada' });
+    try {
+        const qOrden = `
+            SELECT o.*, c.nombre_completo as cliente_nombre, c.telefono as cliente_telefono 
+            FROM ordenes o 
+            LEFT JOIN clientes c ON o.cliente_id = c.id 
+            WHERE o.id = ?
+        `;
+        const ordenRes = await db.execute({ sql: qOrden, args: [id] });
+        if (ordenRes.rows.length === 0) return res.status(404).json({ status: 'error', message: 'Orden no encontrada' });
+        
+        const orden = ordenRes.rows[0];
         if (!orden.cliente_telefono) return res.status(400).json({ status: 'error', message: 'El cliente no tiene teléfono registrado.' });
 
-        db.all(`SELECT oi.*, s.nombre as servicio_nombre FROM orden_items oi LEFT JOIN servicios s ON oi.servicio_id = s.id WHERE oi.orden_id = ?`, [id], (err, items) => {
-            if (err) return res.status(500).json({ status: 'error', message: err.message });
-
-            let telefonoLimpio = orden.cliente_telefono.replace(/\D/g, '');
-            let detallePrendas = items.map(i => {
-                let desc = `- ${i.cantidad} ${i.servicio_nombre}`;
-                if (i.observacion_prenda && i.observacion_prenda.trim() !== '') {
-                    desc += ` (${i.observacion_prenda})`;
-                }
-                return desc;
-            }).join('\n');
-
-            let mensaje = `🧺 LAVASECO LAVATEX\n\n¡Hola ${orden.cliente_nombre}! Su recibo *${orden.codigo_orden}* está listo.\n\n📋 Detalle:\n${detallePrendas}\n\n💰 Total: $${Number(orden.total).toLocaleString('es-CO')} COP\n💵 Abono: $${Number(orden.abono).toLocaleString('es-CO')} COP\n🔴 Saldo: $${Number(orden.saldo).toLocaleString('es-CO')} COP\n\n¡Lo esperamos en Calle 19A # 10-81 Pasaje de Vargas!`;
-
-            let urlWhatsapp = `https://api.whatsapp.com/send?phone=57${telefonoLimpio}&text=${encodeURIComponent(mensaje)}`;
-            res.json({ status: 'success', urlWhatsapp });
+        const itemsRes = await db.execute({
+            sql: `SELECT oi.*, s.nombre as servicio_nombre FROM orden_items oi LEFT JOIN servicios s ON oi.servicio_id = s.id WHERE oi.orden_id = ?`,
+            args: [id]
         });
-    });
+
+        let telefonoLimpio = orden.cliente_telefono.replace(/\D/g, '');
+        let detallePrendas = itemsRes.rows.map(i => {
+            let desc = `- ${i.cantidad} ${i.servicio_nombre}`;
+            if (i.observacion_prenda && i.observacion_prenda.trim() !== '') {
+                desc += ` (${i.observacion_prenda})`;
+            }
+            return desc;
+        }).join('\n');
+
+        let mensaje = `🧺 LAVASECO LAVATEX\n\n¡Hola ${orden.cliente_nombre}! Su recibo *${orden.codigo_orden}* está listo.\n\n📋 Detalle:\n${detallePrendas}\n\n💰 Total: $${Number(orden.total).toLocaleString('es-CO')} COP\n💵 Abono: $${Number(orden.abono).toLocaleString('es-CO')} COP\n🔴 Saldo: $${Number(orden.saldo).toLocaleString('es-CO')} COP\n\n¡Lo esperamos en Calle 19A # 10-81 Pasaje de Vargas!`;
+
+        let urlWhatsapp = `https://api.whatsapp.com/send?phone=57${telefonoLimpio}&text=${encodeURIComponent(mensaje)}`;
+        res.json({ status: 'success', urlWhatsapp });
+    } catch (err) {
+        res.status(500).json({ status: 'error', message: err.message });
+    }
 });
 
 // Ticket
-app.get('/api/caja/ticket/:id', (req, res) => {
+app.get('/api/caja/ticket/:id', async (req, res) => {
     const { id } = req.params;
-    const qOrden = `
-        SELECT o.*, c.nombre_completo as cliente_nombre, c.numero_identificacion as cliente_cedula, c.telefono as cliente_telefono 
-        FROM ordenes o 
-        LEFT JOIN clientes c ON o.cliente_id = c.id 
-        WHERE o.id = ?
-    `;
-    db.get(qOrden, [id], (err, orden) => {
-        if (err || !orden) return res.status(404).json({ status: 'error', message: 'Orden no encontrada' });
-
-        db.all(`SELECT oi.*, s.nombre as servicio_nombre FROM orden_items oi LEFT JOIN servicios s ON oi.servicio_id = s.id WHERE oi.orden_id = ?`, [id], (err, items) => {
-            if (err) return res.status(500).json({ status: 'error', message: err.message });
-            res.json({ status: 'success', ticket: { orden, items } });
+    try {
+        const qOrden = `
+            SELECT o.*, c.nombre_completo as cliente_nombre, c.numero_identificacion as cliente_cedula, c.telefono as cliente_telefono 
+            FROM ordenes o 
+            LEFT JOIN clientes c ON o.cliente_id = c.id 
+            WHERE o.id = ?
+        `;
+        const ordenRes = await db.execute({ sql: qOrden, args: [id] });
+        if (ordenRes.rows.length === 0) return res.status(404).json({ status: 'error', message: 'Orden no encontrada' });
+        
+        const orden = ordenRes.rows[0];
+        const itemsRes = await db.execute({
+            sql: `SELECT oi.*, s.nombre as servicio_nombre FROM orden_items oi LEFT JOIN servicios s ON oi.servicio_id = s.id WHERE oi.orden_id = ?`,
+            args: [id]
         });
-    });
+
+        res.json({ status: 'success', ticket: { orden, items: itemsRes.rows } });
+    } catch (err) {
+        res.status(500).json({ status: 'error', message: err.message });
+    }
 });
 
 // Caja y Finanzas
-app.get('/api/caja/estado', (req, res) => {
-    db.get(`SELECT * FROM caja_turnos WHERE estado = 'ABIERTA' ORDER BY id DESC LIMIT 1`, [], (err, turno) => {
-        if (err) return res.status(500).json({ status: 'error', message: err.message });
-        if (!turno) return res.json({ status: 'success', cajaAbierta: false });
+app.get('/api/caja/estado', async (req, res) => {
+    try {
+        const turnoRes = await db.execute(`SELECT * FROM caja_turnos WHERE estado = 'ABIERTA' ORDER BY id DESC LIMIT 1`);
+        if (turnoRes.rows.length === 0) return res.json({ status: 'success', cajaAbierta: false });
 
-        const qMov = `SELECT * FROM caja_movimientos WHERE turno_id = ?`;
-        db.all(qMov, [turno.id], (err, movs) => {
-            if (err) return res.status(500).json({ status: 'error', message: err.message });
+        const turno = turnoRes.rows[0];
+        const movRes = await db.execute({ sql: `SELECT * FROM caja_movimientos WHERE turno_id = ?`, args: [turno.id] });
 
-            let totalIngresos = movs.filter(m => m.tipo === 'INGRESO' || m.tipo === 'ABONO').reduce((acc, m) => acc + m.monto, 0);
-            let totalEgresos = movs.filter(m => m.tipo === 'EGRESO').reduce((acc, m) => acc + m.monto, 0);
-            let saldoEsperado = turno.monto_apertura + totalIngresos - totalEgresos;
+        let totalIngresos = movRes.rows.filter(m => m.tipo === 'INGRESO' || m.tipo === 'ABONO').reduce((acc, m) => acc + m.monto, 0);
+        let totalEgresos = movRes.rows.filter(m => m.tipo === 'EGRESO').reduce((acc, m) => acc + m.monto, 0);
+        let saldoEsperado = turno.monto_apertura + totalIngresos - totalEgresos;
 
-            res.json({
-                status: 'success',
-                cajaAbierta: true,
-                turno,
-                resumen: { montoApertura: turno.monto_apertura, totalIngresos, totalEgresos, saldoEsperado }
-            });
+        res.json({
+            status: 'success',
+            cajaAbierta: true,
+            turno,
+            resumen: { montoApertura: turno.monto_apertura, totalIngresos, totalEgresos, saldoEsperado }
         });
-    });
+    } catch (err) {
+        res.status(500).json({ status: 'error', message: err.message });
+    }
 });
 
-app.post('/api/caja/abrir', (req, res) => {
+app.post('/api/caja/abrir', async (req, res) => {
     const { monto_apertura } = req.body;
-    db.run(`INSERT INTO caja_turnos (monto_apertura, estado) VALUES (?, 'ABIERTA')`, [monto_apertura || 0], function(err) {
-        if (err) return res.status(500).json({ status: 'error', message: err.message });
-        res.json({ status: 'success', message: 'Caja abierta con éxito', turnoId: this.lastID });
-    });
+    try {
+        const result = await db.execute({
+            sql: `INSERT INTO caja_turnos (monto_apertura, estado) VALUES (?, 'ABIERTA')`,
+            args: [monto_apertura || 0]
+        });
+        res.json({ status: 'success', message: 'Caja abierta con éxito', turnoId: Number(result.lastInsertRowid) });
+    } catch (err) {
+        res.status(500).json({ status: 'error', message: err.message });
+    }
 });
 
-app.post('/api/caja/egreso', (req, res) => {
+app.post('/api/caja/egreso', async (req, res) => {
     const { monto, concepto } = req.body;
-    db.get(`SELECT id FROM caja_turnos WHERE estado = 'ABIERTA' ORDER BY id DESC LIMIT 1`, [], (err, turno) => {
-        if (!turno) return res.status(400).json({ status: 'error', message: 'No hay turno de caja abierto.' });
-        db.run(`INSERT INTO caja_movimientos (turno_id, tipo, monto, concepto) VALUES (?, 'EGRESO', ?, ?)`, [turno.id, monto, concepto], function(err) {
-            if (err) return res.status(500).json({ status: 'error', message: err.message });
-            res.json({ status: 'success', message: 'Egreso registrado correctamente' });
+    try {
+        const turnoRes = await db.execute(`SELECT id FROM caja_turnos WHERE estado = 'ABIERTA' ORDER BY id DESC LIMIT 1`);
+        if (turnoRes.rows.length === 0) return res.status(400).json({ status: 'error', message: 'No hay turno de caja abierto.' });
+
+        await db.execute({
+            sql: `INSERT INTO caja_movimientos (turno_id, tipo, monto, concepto) VALUES (?, 'EGRESO', ?, ?)`,
+            args: [turnoRes.rows[0].id, monto, concepto]
         });
-    });
+        res.json({ status: 'success', message: 'Egreso registrado correctamente' });
+    } catch (err) {
+        res.status(500).json({ status: 'error', message: err.message });
+    }
 });
 
-app.post('/api/caja/cerrar', (req, res) => {
+app.post('/api/caja/cerrar', async (req, res) => {
     const { monto_cierre_efectivo } = req.body;
-    db.get(`SELECT * FROM caja_turnos WHERE estado = 'ABIERTA' ORDER BY id DESC LIMIT 1`, [], (err, turno) => {
-        if (!turno) return res.status(400).json({ status: 'error', message: 'No hay caja abierta.' });
+    try {
+        const turnoRes = await db.execute(`SELECT * FROM caja_turnos WHERE estado = 'ABIERTA' ORDER BY id DESC LIMIT 1`);
+        if (turnoRes.rows.length === 0) return res.status(400).json({ status: 'error', message: 'No hay caja abierta.' });
 
-        db.all(`SELECT * FROM caja_movimientos WHERE turno_id = ?`, [turno.id], (err, movs) => {
-            let totalIngresos = movs.filter(m => m.tipo === 'INGRESO' || m.tipo === 'ABONO').reduce((acc, m) => acc + m.monto, 0);
-            let totalEgresos = movs.filter(m => m.tipo === 'EGRESO').reduce((acc, m) => acc + m.monto, 0);
-            let saldoEsperado = turno.monto_apertura + totalIngresos - totalEgresos;
-            let diferencia = (monto_cierre_efectivo || 0) - saldoEsperado;
+        const turno = turnoRes.rows[0];
+        const movRes = await db.execute({ sql: `SELECT * FROM caja_movimientos WHERE turno_id = ?`, args: [turno.id] });
 
-            db.run(`UPDATE caja_turnos SET monto_cierre = ?, efectivo_contado = ?, diferencia = ?, fecha_cierre = CURRENT_TIMESTAMP, estado = 'CERRADA' WHERE id = ?`,
-                [saldoEsperado, monto_cierre_efectivo || 0, diferencia, turno.id], function(err) {
-                    if (err) return res.status(500).json({ status: 'error', message: err.message });
-                    res.json({ status: 'success', resumen: { saldoEsperado, efectivoContado: monto_cierre_efectivo, diferencia } });
-                });
+        let totalIngresos = movRes.rows.filter(m => m.tipo === 'INGRESO' || m.tipo === 'ABONO').reduce((acc, m) => acc + m.monto, 0);
+        let totalEgresos = movRes.rows.filter(m => m.tipo === 'EGRESO').reduce((acc, m) => acc + m.monto, 0);
+        let saldoEsperado = turno.monto_apertura + totalIngresos - totalEgresos;
+        let diferencia = (monto_cierre_efectivo || 0) - saldoEsperado;
+
+        await db.execute({
+            sql: `UPDATE caja_turnos SET monto_cierre = ?, efectivo_contado = ?, diferencia = ?, fecha_cierre = CURRENT_TIMESTAMP, estado = 'CERRADA' WHERE id = ?`,
+            args: [saldoEsperado, monto_cierre_efectivo || 0, diferencia, turno.id]
         });
-    });
+
+        res.json({ status: 'success', resumen: { saldoEsperado, efectivoContado: monto_cierre_efectivo, diferencia } });
+    } catch (err) {
+        res.status(500).json({ status: 'error', message: err.message });
+    }
 });
 
 // Reportes
-app.get('/api/caja/reporte-ventas', (req, res) => {
+app.get('/api/caja/reporte-ventas', async (req, res) => {
     const { fecha_inicio, fecha_fin } = req.query;
     let whereClause = `WHERE 1=1`;
     let params = [];
@@ -455,9 +491,9 @@ app.get('/api/caja/reporte-ventas', (req, res) => {
         params.push(fecha_inicio, fecha_fin);
     }
 
-    const qOrdenes = `SELECT * FROM ordenes ${whereClause}`;
-    db.all(qOrdenes, params, (err, ordenes) => {
-        if (err) return res.status(500).json({ status: 'error', message: err.message });
+    try {
+        const ordenesRes = await db.execute({ sql: `SELECT * FROM ordenes ${whereClause}`, args: params });
+        const ordenes = ordenesRes.rows;
 
         let totalPedidos = ordenes.length;
         let totalSubtotal = ordenes.reduce((acc, o) => acc + o.total, 0);
@@ -473,48 +509,53 @@ app.get('/api/caja/reporte-ventas', (req, res) => {
             ${whereClause}
             GROUP BY s.id
         `;
-        db.all(qServicios, params, (err, porServicio) => {
-            if (err) return res.status(500).json({ status: 'error', message: err.message });
+        const servRes = await db.execute({ sql: qServicios, args: params });
 
-            res.json({
-                status: 'success',
-                resumen: {
-                    totalPedidos,
-                    totalSubtotal,
-                    totalVendido,
-                    totalAbonosPedidos,
-                    dineroRecibidoCaja: totalAbonosPedidos,
-                    totalSaldosPendientes
-                },
-                porServicio
-            });
+        res.json({
+            status: 'success',
+            resumen: {
+                totalPedidos,
+                totalSubtotal,
+                totalVendido,
+                totalAbonosPedidos,
+                dineroRecibidoCaja: totalAbonosPedidos,
+                totalSaldosPendientes
+            },
+            porServicio: servRes.rows
         });
-    });
+    } catch (err) {
+        res.status(500).json({ status: 'error', message: err.message });
+    }
 });
 
 // Inventario
-app.get('/api/inventario/insumos', (req, res) => {
-    db.all(`SELECT * FROM insumos ORDER BY nombre ASC`, [], (err, rows) => {
-        if (err) return res.status(500).json({ status: 'error', message: err.message });
-        res.json({ status: 'success', data: rows });
-    });
+app.get('/api/inventario/insumos', async (req, res) => {
+    try {
+        const result = await db.execute(`SELECT * FROM insumos ORDER BY nombre ASC`);
+        res.json({ status: 'success', data: result.rows });
+    } catch (err) {
+        res.status(500).json({ status: 'error', message: err.message });
+    }
 });
 
-app.post('/api/inventario/movimiento', (req, res) => {
+app.post('/api/inventario/movimiento', async (req, res) => {
     const { insumo_id, tipo, cantidad, motivo } = req.body;
-    db.serialize(() => {
-        db.run('BEGIN TRANSACTION');
-        db.run(`INSERT INTO insumo_movimientos (insumo_id, tipo, cantidad, motivo) VALUES (?, ?, ?, ?)`, [insumo_id, tipo, cantidad, motivo || ''], (err) => {
-            if (err) { db.run('ROLLBACK'); return res.status(500).json({ status: 'error', message: err.message }); }
-
-            let factor = tipo === 'ENTRADA_COMPRA' ? cantidad : -cantidad;
-            db.run(`UPDATE insumos SET stock_actual = stock_actual + ? WHERE id = ?`, [factor, insumo_id], (err) => {
-                if (err) { db.run('ROLLBACK'); return res.status(500).json({ status: 'error', message: err.message }); }
-                db.run('COMMIT');
-                res.json({ status: 'success', message: 'Movimiento de inventario registrado con éxito' });
-            });
+    try {
+        await db.execute({
+            sql: `INSERT INTO insumo_movimientos (insumo_id, tipo, cantidad, motivo) VALUES (?, ?, ?, ?)`,
+            args: [insumo_id, tipo, cantidad, motivo || '']
         });
-    });
+
+        let factor = tipo === 'ENTRADA_COMPRA' ? cantidad : -cantidad;
+        await db.execute({
+            sql: `UPDATE insumos SET stock_actual = stock_actual + ? WHERE id = ?`,
+            args: [factor, insumo_id]
+        });
+
+        res.json({ status: 'success', message: 'Movimiento de inventario registrado con éxito' });
+    } catch (err) {
+        res.status(500).json({ status: 'error', message: err.message });
+    }
 });
 
 app.listen(PORT, () => {
