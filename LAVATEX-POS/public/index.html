@@ -198,7 +198,7 @@
         <div id="vista-seguimiento" class="section-view">
             <div class="card">
                 <h2>Control de Estados, Ubicación y Notificaciones</h2>
-                <div class="form-group"><input type="text" id="searchTracking" class="form-control" placeholder="Buscar por número de recibo (ej. 0001) o nombre de cliente..." onkeyup="filtrarTracking()"></div>
+                <div class="form-group"><input type="text" id="searchTracking" class="form-control" placeholder="Buscar por número de recibo (ej. 0001), nombre o cédula..." onkeyup="filtrarTracking()"></div>
                 <div class="table-container">
                     <table>
                         <thead>
@@ -768,10 +768,15 @@
 
         function filtrarTracking() {
             const texto = document.getElementById('searchTracking').value.toLowerCase().trim();
-            const filtrados = ordenesCache.filter(o => 
-                o.codigo_orden.toLowerCase().includes(texto) || 
-                (o.cliente_nombre && o.cliente_nombre.toLowerCase().includes(texto))
-            );
+            if (!ordenesCache || ordenesCache.length === 0) return;
+            
+            const filtrados = ordenesCache.filter(o => {
+                const codigo = (o.codigo_orden || '').toLowerCase();
+                const nombre = (o.cliente_nombre || '').toLowerCase();
+                const cedula = (o.cliente_cedula || '').toLowerCase();
+                
+                return codigo.includes(texto) || nombre.includes(texto) || cedula.includes(texto);
+            });
             renderizarTablaTracking(filtrados);
         }
 
