@@ -386,8 +386,11 @@
             <p id="t_saldo" style="text-align:right; font-weight:bold; color:#e11d48;"></p>
             <hr>
             <p style="font-size:11px;">¡Gracias por su preferencia!</p>
-            <button class="btn no-print" onclick="window.print()" style="margin-top:15px; background:#166534;">🖨️ Imprimir Ticket</button>
-            <button class="btn no-print" onclick="cerrarTicket()" style="margin-top:5px; background:#64748b;">Cerrar</button>
+            <div style="display: flex; gap: 6px; margin-top: 15px;">
+                <button class="btn no-print" onclick="window.print()" style="background:#166534; flex:1; padding:8px;">🖨️ Imprimir</button>
+                <button class="btn no-print" id="btnWhatsAppTicket" onclick="" style="background:#25d366; flex:1; padding:8px;">📲 WhatsApp</button>
+            </div>
+            <button class="btn no-print" onclick="cerrarTicket()" style="margin-top:6px; background:#64748b; padding:8px;">Cerrar Ventana</button>
         </div>
     </div>
 
@@ -520,7 +523,6 @@
             const filtrados = clientesCache.filter(c => (c.numero_identificacion && c.numero_identificacion.toLowerCase().includes(filtro)) || c.nombre_completo.toLowerCase().includes(filtro) || c.telefono.includes(filtro));
             actualizarSelectClientes(filtrados);
 
-            // Autoseleccionar si coincide exactamente con la cédula o nombre ingresado
             if(filtro.length >= 3 && filtrados.length === 1) {
                 document.getElementById('selectCliente').value = filtrados[0].id;
             }
@@ -711,11 +713,15 @@
                 document.getElementById('t_codigo').innerText = t.orden.codigo_orden;
                 document.getElementById('t_fecha').innerText = new Date(t.orden.fecha_recepcion).toLocaleString();
                 document.getElementById('t_cliente').innerText = `Cliente: ${t.orden.cliente_nombre || 'General'}\nCédula: ${t.orden.cliente_cedula || 'N/A'}\nTel: ${t.orden.cliente_telefono || 'N/A'}`;
-                document.getElementById('t_items').innerHTML = t.items.map(i => `<p>${i.cantidad}x ${i.servicio_nombre} = $${formatoMoneda(i.subtotal_item)} COP</p>`).join('');
+                document.getElementById('t_items').innerHTML = t.items.map(i => `<p>${i.cantidad} ${i.servicio_nombre} = $${formatoMoneda(i.subtotal_item)} COP</p>`).join('');
                 document.getElementById('t_subtotal').innerText = `Subtotal: $${formatoMoneda(t.orden.subtotal)} COP`;
                 document.getElementById('t_total').innerText = `TOTAL: $${formatoMoneda(t.orden.total)} COP`;
                 document.getElementById('t_abono').innerText = `Abono: $${formatoMoneda(t.orden.abono)} COP`;
                 document.getElementById('t_saldo').innerText = `Saldo Pendiente: $${formatoMoneda(t.orden.saldo)} COP`;
+                
+                // Configurar el botón de WhatsApp del modal ticket
+                document.getElementById('btnWhatsAppTicket').setAttribute('onclick', `enviarWhatsapp(${ordenId})`);
+                
                 document.getElementById('modalTicket').style.display = 'flex';
             }
         }

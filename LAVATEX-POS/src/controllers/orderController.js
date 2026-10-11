@@ -105,8 +105,8 @@ const crearOrden = (req, res) => {
         db.serialize(() => {
             db.run('BEGIN TRANSACTION');
 
-            const queryOrden = `INSERT INTO ordenes (codigo_orden, cliente_id, subtotal, descuento, total, abono, saldo, fecha_entrega_estimada, observaciones) 
-                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+            const queryOrden = `INSERT INTO ordenes (codigo_orden, cliente_id, subtotal, descuento, total, abono, saldo, fecha_entrega_estimada, observaciones, estado) 
+                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Recibido')`;
             
             db.run(queryOrden, [codigo_orden, cliente_id, subtotal, descuento, total, montoAbono, saldo, fechaEntrega.toISOString(), observaciones], function(err) {
                 if (err) { db.run('ROLLBACK'); return res.status(500).json({ status: 'error', message: err.message }); }
@@ -211,7 +211,7 @@ const actualizarEstadoOrden = (req, res) => {
     });
 };
 
-// Generar enlace detallado para notificación de WhatsApp con descripción de prendas
+// Generar enlace detallado para notificación de WhatsApp con descripción exacta de prendas
 const obtenerMensajeWhatsapp = (req, res) => {
     const { id } = req.params;
 
@@ -232,8 +232,8 @@ const obtenerMensajeWhatsapp = (req, res) => {
             if (tel.length === 10) tel = '57' + tel;
 
             const estadoNormalizado = (orden.estado || '').trim().toLowerCase();
-            let detallePrendas = items.map(i => `• ${i.cantidad}x ${i.servicio_nombre}`).join('\n');
-            if (!detallePrendas) detallePrendas = '• Servicios generales de lavandería';
+            let detallePrendas = items.map(i => `• ${i.cantidad} ${i.servicio_nombre}`).join('\n');
+            if (!detallePrendas) detallePrendas = '• Prendas generales de lavandería';
 
             let textoMensaje = "";
 
