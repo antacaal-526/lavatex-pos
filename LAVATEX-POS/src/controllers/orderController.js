@@ -44,24 +44,21 @@ const actualizarServicio = (req, res) => {
 const eliminarServicio = (req, res) => {
     const { id } = req.params;
 
-    // Verificar si el servicio ya fue usado en algún detalle de orden histórica
     db.get(`SELECT COUNT(*) as count FROM detalle_orden WHERE servicio_id = ?`, [id], (err, row) => {
         if (err) return res.status(500).json({ status: 'error', message: err.message });
 
         if (row.count > 0) {
-            // Como ya tiene historial, no se puede borrar físicamente; se desactiva para proteger el sistema.
             db.run(`UPDATE servicios SET activo = 0 WHERE id = ?`, [id], (errUp) => {
                 if (errUp) return res.status(500).json({ status: 'error', message: errUp.message });
                 res.json({ 
                     status: 'success', 
-                    message: 'El servicio tiene pedidos históricos asociados. En lugar de eliminarlo, ha sido DESACTIVADO exitosamente para proteger los registros contables.' 
+                    message: 'El servicio tiene pedidos históricos asociados. Ha sido DESACTIVADO exitosamente.' 
                 });
             });
         } else {
-            // Si no tiene historial, se puede borrar sin problemas
             db.run(`DELETE FROM servicios WHERE id = ?`, [id], (errDel) => {
                 if (errDel) return res.status(500).json({ status: 'error', message: errDel.message });
-                res.json({ status: 'success', message: 'Servicio eliminado permanentemente de la base de datos.' });
+                res.json({ status: 'success', message: 'Servicio eliminado permanentemente.' });
             });
         }
     });
@@ -70,7 +67,7 @@ const eliminarServicio = (req, res) => {
 // Obtener listado de órdenes con datos de cliente
 const obtenerOrdenes = (req, res) => {
     const query = `
-        SELECT o.*, c.nombre_completo as cliente_nombre, c.telefono as cliente_telefono 
+        SELECT o.*, c.nombre_completo as cliente_nombre, c.telefono as cliente_telefono, c.numero_identificacion as cliente_cedula 
         FROM ordenes o 
         LEFT JOIN clientes c ON o.cliente_id = c.id 
         ORDER BY o.id DESC LIMIT 100
@@ -81,60 +78,97 @@ const obtenerOrdenes = (req, res) => {
     });
 };
 
-// Crear nueva orden
+// Crear nueva orden con consecutivo diario desde 1
 const crearOrden = (req, res) => {
-    const { cliente_id, items, descuento = 0, abono = 0, observaciones = '' } = req.body;
+    const { cliente_id, items, descuento = 0, abono = 0, observaciones = '', fecha_entrega_estimada } = req.body;
 
     if (!cliente_id || !items || items.length === 0) {
         return res.status(400).json({ status: 'error', message: 'Debe seleccionar un cliente y al menos un servicio.' });
     }
 
     const fechaStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-    const randomNum = Math.floor(1000 + Math.random() * 9000);
-    const codigo_orden = `ORD-${fechaStr}-${randomNum}`;
+    
+    // Consultar el consecutivo diario del día actual
+    db.get(`SELECT COUNT(*) as total FROM ordenes WHERE codigo_orden LIKE ?`, [`ORD-${fechaStr}-%`], (errCount, rowCount) => {
+        const consecutivo = (rowCount ? rowCount.total : 0) + 1;
+        const codigo_orden = `ORD-${fechaStr}-${consecutivo}`;
 
-    let subtotal = 0;
-    items.forEach(item => { subtotal += item.cantidad * item.precio_unitario; });
+        let subtotal = 0;
+        items.forEach(item => { subtotal += item.cantidad * item.precio_unitario; });
 
-    const total = Math.max(0, subtotal - parseFloat(descuento));
-    const montoAbono = parseFloat(abono) || 0;
-    const saldo = Math.max(0, total - montoAbono);
-    const fechaEntrega = new Date();
-    fechaEntrega.setHours(fechaEntrega.getHours() + 24);
+        const total = Math.max(0, subtotal - parseFloat(descuento));
+        const montoAbono = parseFloat(abono) || 0;
+        const saldo = Math.max(0, total - montoAbono);
+        
+        let fechaEntrega = fecha_entrega_estimada ? new Date(fecha_entrega_estimada) : new Date();
+        if (!fecha_entrega_estimada) fechaEntrega.setHours(fechaEntrega.getHours() + 24);
 
+        db.serialize(() => {
+            db.run('BEGIN TRANSACTION');
+
+            const queryOrden = `INSERT INTO ordenes (codigo_orden, cliente_id, subtotal, descuento, total, abono, saldo, fecha_entrega_estimada, observaciones) 
+                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+            
+            db.run(queryOrden, [codigo_orden, cliente_id, subtotal, descuento, total, montoAbono, saldo, fechaEntrega.toISOString(), observaciones], function(err) {
+                if (err) { db.run('ROLLBACK'); return res.status(500).json({ status: 'error', message: err.message }); }
+
+                const ordenId = this.lastID;
+                const queryDetalle = `INSERT INTO detalle_orden (orden_id, servicio_id, cantidad, precio_unitario, subtotal_item, observacion_prenda) VALUES (?, ?, ?, ?, ?, ?)`;
+                const stmt = db.prepare(queryDetalle);
+                let errorOcurrido = false;
+
+                items.forEach(item => {
+                    const subItem = item.cantidad * item.precio_unitario;
+                    stmt.run([ordenId, item.servicio_id, item.cantidad, item.precio_unitario, subItem, item.observacion_prenda || ''], (e) => { if(e) errorOcurrido = true; });
+                });
+
+                stmt.finalize(() => {
+                    if (errorOcurrido) { db.run('ROLLBACK'); return res.status(500).json({ status: 'error', message: 'Error al registrar ítems.' }); }
+
+                    if (montoAbono > 0) {
+                        db.get(`SELECT id FROM turnos_caja WHERE estado = 'ABIERTA' ORDER BY id DESC LIMIT 1`, [], (errCaja, turno) => {
+                            if (turno) {
+                                db.run(`INSERT INTO movimientos_caja (turno_id, orden_id, tipo, monto, concepto) VALUES (?, ?, 'INGRESO_ABONO', ?, ?)`,
+                                    [turno.id, ordenId, montoAbono, `Abono inicial orden ${codigo_orden}`]);
+                            }
+                        });
+                    }
+
+                    db.run('COMMIT');
+
+                    // Devolver todos los datos necesarios para que el ticket no salga en blanco
+                    db.get(`SELECT o.*, c.nombre_completo as cliente_nombre, c.telefono as cliente_telefono, c.numero_identificacion as cliente_cedula, c.direccion as cliente_direccion FROM ordenes o LEFT JOIN clientes c ON o.cliente_id = c.id WHERE o.id = ?`, [ordenId], (errGet, ordenCompleta) => {
+                        db.all(`SELECT d.*, s.nombre as servicio_nombre FROM detalle_orden d LEFT JOIN servicios s ON d.servicio_id = s.id WHERE d.orden_id = ?`, [ordenId], (errDet, itemsCompletos) => {
+                            res.status(201).json({ 
+                                status: 'success', 
+                                message: 'Orden creada exitosamente.', 
+                                ordenId, 
+                                codigo_orden,
+                                orden: { ...ordenCompleta, items: itemsCompletos } 
+                            });
+                        });
+                    });
+                });
+            });
+        });
+    });
+};
+
+// Eliminar orden de forma segura
+const eliminarOrden = (req, res) => {
+    const { id } = req.params;
     db.serialize(() => {
         db.run('BEGIN TRANSACTION');
-
-        const queryOrden = `INSERT INTO ordenes (codigo_orden, cliente_id, subtotal, descuento, total, abono, saldo, fecha_entrega_estimada, observaciones) 
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`;
-        
-        db.run(queryOrden, [codigo_orden, cliente_id, subtotal, descuento, total, montoAbono, saldo, fechaEntrega.toISOString(), observaciones], function(err) {
-            if (err) { db.run('ROLLBACK'); return res.status(500).json({ status: 'error', message: err.message }); }
-
-            const ordenId = this.lastID;
-            const queryDetalle = `INSERT INTO detalle_orden (orden_id, servicio_id, cantidad, precio_unitario, subtotal_item, observacion_prenda) VALUES (?, ?, ?, ?, ?, ?)`;
-            const stmt = db.prepare(queryDetalle);
-            let errorOcurrido = false;
-
-            items.forEach(item => {
-                const subItem = item.cantidad * item.precio_unitario;
-                stmt.run([ordenId, item.servicio_id, item.cantidad, item.precio_unitario, subItem, item.observacion_prenda || ''], (e) => { if(e) errorOcurrido = true; });
-            });
-
-            stmt.finalize(() => {
-                if (errorOcurrido) { db.run('ROLLBACK'); return res.status(500).json({ status: 'error', message: 'Error al registrar ítems.' }); }
-
-                if (montoAbono > 0) {
-                    db.get(`SELECT id FROM turnos_caja WHERE estado = 'ABIERTA' ORDER BY id DESC LIMIT 1`, [], (errCaja, turno) => {
-                        if (turno) {
-                            db.run(`INSERT INTO movimientos_caja (turno_id, orden_id, tipo, monto, concepto) VALUES (?, ?, 'INGRESO_ABONO', ?, ?)`,
-                                [turno.id, ordenId, montoAbono, `Abono inicial orden ${codigo_orden}`]);
-                        }
-                    });
-                }
-
-                db.run('COMMIT');
-                res.status(201).json({ status: 'success', message: 'Orden creada exitosamente.', ordenId, codigo_orden });
+        db.run(`DELETE FROM detalle_orden WHERE orden_id = ?`, [id], (errDet) => {
+            if (errDet) { db.run('ROLLBACK'); return res.status(500).json({ status: 'error', message: errDet.message }); }
+            db.run(`DELETE FROM movimientos_caja WHERE orden_id = ?`, [id], (errMov) => {
+                if (errMov) { db.run('ROLLBACK'); return res.status(500).json({ status: 'error', message: errMov.message }); }
+                db.run(`DELETE FROM historial_estados WHERE orden_id = ?`, [errHist => {}]);
+                db.run(`DELETE FROM ordenes WHERE id = ?`, [id], (errOrd) => {
+                    if (errOrd) { db.run('ROLLBACK'); return res.status(500).json({ status: 'error', message: errOrd.message }); }
+                    db.run('COMMIT');
+                    res.json({ status: 'success', message: 'Orden eliminada correctamente.' });
+                });
             });
         });
     });
@@ -201,16 +235,16 @@ const obtenerMensajeWhatsapp = (req, res) => {
 
         if (estadoNormalizado === 'listo para entrega' || estadoNormalizado === 'listo') {
             textoMensaje = `🧺 *LAVANDERÍA LAVATEX*\n\n¡Hola ${orden.cliente_nombre}! Su pedido con la orden *${orden.codigo_orden}* ya está *LISTO PARA ENTREGA* en nuestro local.\n\n` +
-                           `💰 *Total:* $${orden.total.toLocaleString()} COP\n` +
-                           `💳 *Saldo Pendiente:* $${orden.saldo.toLocaleString()} COP\n` +
-                           `📍 *Ubicación:* ${orden.ubicacion_fisica || 'Estantería Principal'}\n\n` +
-                           `¡Le esperamos!`;
+                            `💰 *Total:* $${orden.total.toLocaleString()} COP\n` +
+                            `💳 *Saldo Pendiente:* $${orden.saldo.toLocaleString()} COP\n` +
+                            `📍 *Ubicación:* ${orden.ubicacion_fisica || 'Estantería Principal'}\n\n` +
+                            `¡Le esperamos!`;
         } else {
             textoMensaje = `🧺 *LAVANDERÍA LAVATEX*\n\nHola ${orden.cliente_nombre}, le informamos sobre su pedido *${orden.codigo_orden}*.\n\n` +
-                           `📌 *Estado Actual:* ${orden.estado}\n` +
-                           `💵 *Total:* $${orden.total.toLocaleString()} COP\n` +
-                           `💳 *Saldo Pendiente:* $${orden.saldo.toLocaleString()} COP\n\n` +
-                           `¡Gracias por confiar en nosotros!`;
+                            `📌 *Estado Actual:* ${orden.estado}\n` +
+                            `💵 *Total:* $${orden.total.toLocaleString()} COP\n` +
+                            `💳 *Saldo Pendiente:* $${orden.saldo.toLocaleString()} COP\n\n` +
+                            `¡Gracias por confiar en nosotros!`;
         }
 
         const urlWa = `https://wa.me/${tel}?text=${encodeURIComponent(textoMensaje)}`;
@@ -225,6 +259,8 @@ module.exports = {
     eliminarServicio,
     obtenerOrdenes,
     crearOrden,
+    eliminarOrden,
+    atualizarEstadoOrden: actualizarEstadoOrden,
     actualizarEstadoOrden,
     obtenerMensajeWhatsapp
 };
