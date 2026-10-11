@@ -37,11 +37,20 @@
         .card { background: var(--white); border-radius: 12px; padding: 25px; box-shadow: 0 2px 10px rgba(0,0,0,0.04); border: 1px solid var(--border); margin-bottom: 20px; }
         .card h2 { font-size: 18px; margin-bottom: 20px; color: var(--text-main); border-bottom: 2px solid var(--border); padding-bottom: 10px; }
         
-        .form-group { margin-bottom: 15px; }
+        .form-group { margin-bottom: 15px; position: relative; }
         .form-group label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 5px; color: var(--text-muted); }
         .form-control { width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; outline: none; }
         .form-control:focus { border-color: var(--primary); }
         
+        /* Estilos para el buscador tipo Google (dropdown flotante) */
+        .dropdown-suggestions {
+            position: absolute; top: 100%; left: 0; right: 0; background: white;
+            border: 1px solid var(--border); border-radius: 0 0 6px 6px; max-height: 200px;
+            overflow-y: auto; z-index: 99; box-shadow: 0 4px 10px rgba(0,0,0,0.1); display: none;
+        }
+        .suggestion-item { padding: 10px 12px; cursor: pointer; font-size: 14px; border-bottom: 1px solid #f1f5f9; }
+        .suggestion-item:hover { background-color: #e0f2fe; color: var(--primary); font-weight: 600; }
+
         .btn { background-color: var(--primary); color: white; border: none; padding: 12px 20px; font-size: 14px; border-radius: 6px; cursor: pointer; font-weight: 600; width: 100%; transition: background 0.2s; }
         .btn:hover { background-color: var(--primary-dark); }
         .btn:disabled { background-color: #94a3b8; cursor: not-allowed; }
@@ -139,15 +148,20 @@
                     <h2>Nueva Orden / Mostrador</h2>
                     <div id="formAlertOrden" class="alert"></div>
                     <form id="orderForm" onsubmit="crearOrden(event)">
+                        <!-- Buscador Cliente Estilo Google -->
                         <div class="form-group">
-                            <label>Buscar por Cédula (Autocompleta Cliente) o Seleccionar *</label>
-                            <input type="text" id="filtroBuscarCliente" class="form-control" placeholder="Escriba número de cédula exacto o nombre..." onkeyup="filtrarClientesOrden()" style="margin-bottom: 8px;">
-                            <select id="selectCliente" class="form-control" required><option value="">-- Seleccione cliente --</option></select>
+                            <label>Buscar Cliente por Cédula o Nombre *</label>
+                            <input type="text" id="inputBuscarCliente" class="form-control" placeholder="Escriba cédula o nombre..." oninput="onInputBuscarCliente()" autocomplete="off">
+                            <input type="hidden" id="selectCliente" required>
+                            <div id="dropdownClientes" class="dropdown-suggestions"></div>
+                            <div id="clienteSeleccionadoInfo" style="margin-top: 6px; font-size: 13px; font-weight: bold; color: var(--primary);"></div>
                         </div>
+
+                        <!-- Buscador Servicio Estilo Google -->
                         <div class="form-group">
-                            <label>Buscar y Seleccionar Servicio (Escriba código ej. PH o nombre) *</label>
-                            <input type="text" id="filtroBuscarServicio" class="form-control" placeholder="Escriba código (ej. PH) o servicio..." onkeyup="filtrarServiciosOrden()" style="margin-bottom: 8px;">
-                            <select id="selectServicio" class="form-control" onchange="agregarItemOrden()"><option value="">-- Seleccione servicio de la lista --</option></select>
+                            <label>Buscar y Agregar Servicio (Código o nombre) *</label>
+                            <input type="text" id="inputBuscarServicio" class="form-control" placeholder="Escriba código ej. PH o servicio..." oninput="onInputBuscarServicio()" autocomplete="off">
+                            <div id="dropdownServicios" class="dropdown-suggestions"></div>
                         </div>
 
                         <div class="table-container" style="margin-bottom: 15px;">
@@ -492,17 +506,11 @@
         async function cargarDatosOrden() {
             const resC = await fetch('/api/clientes');
             const rC = await resC.json();
-            if(rC.status === 'success') {
-                clientesCache = rC.data;
-                actualizarSelectClientes(clientesCache);
-            }
+            if(rC.status === 'success') { clientesCache = rC.data; }
 
             const resS = await fetch('/api/ordenes/servicios');
             const rS = await resS.json();
-            if(rS.status === 'success') {
-                serviciosCache = rS.data;
-                actualizarSelectServicios(serviciosCache);
-            }
+            if(rS.status === 'success') { serviciosCache = rS.data; }
             
             const maniana = new Date();
             maniana.setHours(maniana.getHours() + 24);
@@ -511,46 +519,69 @@
             cargarTablaOrdenesRecientes();
         }
 
-        function actualizarSelectClientes(clientes) {
-            const select = document.getElementById('selectCliente');
-            select.innerHTML = `<option value="">-- Seleccione cliente --</option>` + clientes.map(c => `<option value="${c.id}">${c.nombre_completo} - Cédula: ${c.numero_identificacion || 'S/N'} (${c.telefono})</option>`).join('');
-        }
+        // --- BUSCADOR ESTILO GOOGLE PARA CLIENTES ---
+        function onInputBuscarCliente() {
+            const query = document.getElementById('inputBuscarCliente').value.toLowerCase().trim();
+            const dropdown = document.getElementById('dropdownClientes');
+            if(!query) { dropdown.style.display = 'none'; return; }
 
-        function filtrarClientesOrden() {
-            const filtro = document.getElementById('filtroBuscarCliente').value.toLowerCase().trim();
-            const filtrados = clientesCache.filter(c => (c.numero_identificacion && c.numero_identificacion.toLowerCase().includes(filtro)) || c.nombre_completo.toLowerCase().includes(filtro) || c.telefono.includes(filtro));
-            actualizarSelectClientes(filtrados);
+            const filtrados = clientesCache.filter(c => 
+                (c.numero_identificacion && c.numero_identificacion.toLowerCase().includes(query)) || 
+                c.nombre_completo.toLowerCase().includes(query) || 
+                c.telefono.includes(query)
+            );
 
-            if(filtro.length >= 3 && filtrados.length === 1) {
-                document.getElementById('selectCliente').value = filtrados[0].id;
+            if(filtrados.length === 0) {
+                dropdown.innerHTML = `<div class="suggestion-item" style="color:var(--text-muted);">No se encontraron clientes</div>`;
+            } else {
+                dropdown.innerHTML = filtrados.map(c => `
+                    <div class="suggestion-item" onclick="seleccionarCliente(${c.id}, '${c.nombre_completo}', '${c.numero_identificacion || 'S/N'}', '${c.telefono}')">
+                        <strong>${c.nombre_completo}</strong> - CC: ${c.numero_identificacion || 'S/N'} (${c.telefono})
+                    </div>
+                `).join('');
             }
+            dropdown.style.display = 'block';
         }
 
-        function actualizarSelectServicios(servicios) {
-            const select = document.getElementById('selectServicio');
-            select.innerHTML = `<option value="">-- Seleccione servicio de la lista --</option>` + servicios.map(s => `<option value="${s.id}">[${s.codigo || 'S/C'}] ${s.nombre} - $${formatoMoneda(s.precio)} COP</option>`).join('');
+        function seleccionarCliente(id, nombre, cc, tel) {
+            document.getElementById('selectCliente').value = id;
+            document.getElementById('inputBuscarCliente').value = cc;
+            document.getElementById('dropdownClientes').style.display = 'none';
+            document.getElementById('clienteSeleccionadoInfo').innerText = `Cliente Seleccionado: ${nombre} (${tel})`;
         }
 
-        function filtrarServiciosOrden() {
-            const filtro = document.getElementById('filtroBuscarServicio').value.toLowerCase().trim();
-            const filtrados = serviciosCache.filter(s => (s.codigo && s.codigo.toLowerCase().includes(filtro)) || s.nombre.toLowerCase().includes(filtro) || (s.descripcion && s.descripcion.toLowerCase().includes(filtro)));
-            actualizarSelectServicios(filtrados);
+        // --- BUSCADOR ESTILO GOOGLE PARA SERVICIOS ---
+        function onInputBuscarServicio() {
+            const query = document.getElementById('inputBuscarServicio').value.toLowerCase().trim();
+            const dropdown = document.getElementById('dropdownServicios');
+            if(!query) { dropdown.style.display = 'none'; return; }
+
+            const filtrados = serviciosCache.filter(s => 
+                (s.codigo && s.codigo.toLowerCase().includes(query)) || 
+                s.nombre.toLowerCase().includes(query) || 
+                (s.descripcion && s.descripcion.toLowerCase().includes(query))
+            );
+
+            if(filtrados.length === 0) {
+                dropdown.innerHTML = `<div class="suggestion-item" style="color:var(--text-muted);">No se encontraron servicios</div>`;
+            } else {
+                dropdown.innerHTML = filtrados.map(s => `
+                    <div class="suggestion-item" onclick="agregarServicioPorBusqueda(${s.id})">
+                        [<strong>${s.codigo || 'S/C'}</strong>] ${s.nombre} - $${formatoMoneda(s.precio)} COP
+                    </div>
+                `).join('');
+            }
+            dropdown.style.display = 'block';
         }
 
-        function agregarItemOrden() {
-            const select = document.getElementById('selectServicio');
-            const servicioId = select.value;
-            if(!servicioId) return;
+        function agregarServicioPorBusqueda(servicioId) {
             const serv = serviciosCache.find(s => s.id == servicioId);
             if(!serv) return;
 
             let cantidad = prompt(`Cantidad o peso para "${serv.nombre}":`, "1");
-            if(cantidad === null || isNaN(cantidad) || Number(cantidad) <= 0) {
-                select.value = "";
-                return;
-            }
+            if(cantidad === null || isNaN(cantidad) || Number(cantidad) <= 0) return;
 
-            let observacionPrenda = prompt(`Detalle o tipo de prenda (Ej. BLANCA, Cuero, etc.):`, "");
+            let observacionPrenda = prompt(`Detalle o tipo de prenda (Ej. NEGRO, Cuero, etc.):`, "");
             let cantidadNum = parseFloat(cantidad);
             let subtotalCalculado = cantidadNum * serv.precio;
 
@@ -563,10 +594,16 @@
                 observacion_prenda: observacionPrenda || ''
             });
 
-            select.value = "";
-            document.getElementById('filtroBuscarServicio').value = "";
-            actualizarSelectServicios(serviciosCache);
+            document.getElementById('inputBuscarServicio').value = "";
+            document.getElementById('dropdownServicios').style.display = 'none';
             renderizarItemsOrden();
+        }
+
+        function actualizarSubtotalItem(index, nuevoValor) {
+            let val = parseFloat(nuevoValor);
+            if(isNaN(val) || val < 0) val = 0;
+            itemsOrdenActual[index].subtotal_item = val;
+            calcularTotalesOrden();
         }
 
         function eliminarItemOrden(index) { itemsOrdenActual.splice(index, 1); renderizarItemsOrden(); }
@@ -579,7 +616,7 @@
                     <td><strong>${item.nombre}</strong>${item.observacion_prenda ? `<br><small style="color:var(--text-muted);">Detalle: ${item.observacion_prenda}</small>` : ''}</td>
                     <td>${item.cantidad}</td>
                     <td>
-                        <strong>$${formatoMoneda(item.subtotal_item)}</strong>
+                        <input type="number" class="form-control" value="${item.subtotal_item}" min="0" onchange="actualizarSubtotalItem(${index}, this.value)" style="padding:4px; width:110px;">
                         <br><small style="color: var(--text-muted);">($${formatoMoneda(item.precio_unitario)} c/u)</small>
                     </td>
                     <td><button type="button" onclick="eliminarItemOrden(${index})" style="background:#dc2626; color:white; border:none; padding:4px 8px; border-radius:4px; cursor:pointer;">X</button></td>
@@ -603,6 +640,14 @@
             const alertBox = document.getElementById('formAlertOrden');
             const btnCrear = document.getElementById('btnCrearOrden');
 
+            const clienteId = document.getElementById('selectCliente').value;
+            if(!clienteId) {
+                alertBox.className = 'alert alert-error'; 
+                alertBox.innerText = 'Debe seleccionar un cliente válido buscando por su cédula o nombre.'; 
+                alertBox.style.display = 'block'; 
+                return;
+            }
+
             if(itemsOrdenActual.length === 0) { 
                 alertBox.className = 'alert alert-error'; 
                 alertBox.innerText = 'Debe agregar al menos un servicio.'; 
@@ -614,7 +659,7 @@
             btnCrear.innerText = 'Generando orden...';
 
             const nuevaOrden = {
-                cliente_id: document.getElementById('selectCliente').value,
+                cliente_id: clienteId,
                 items: itemsOrdenActual,
                 abono: parseFloat(document.getElementById('abonoOrden').value) || 0,
                 fecha_entrega_estimada: document.getElementById('fechaEntregaOrden').value,
@@ -636,6 +681,7 @@
                     
                     itemsOrdenActual = []; 
                     document.getElementById('orderForm').reset(); 
+                    document.getElementById('clienteSeleccionadoInfo').innerText = '';
                     renderizarItemsOrden(); 
                     cargarTablaOrdenesRecientes();
                     
