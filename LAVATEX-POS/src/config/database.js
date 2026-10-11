@@ -4,16 +4,59 @@ const path = require('path');
 let db;
 
 if (process.env.TURSO_DATABASE_URL) {
-    const { createClient } = require('@libsql/client');
-    const client = createClient({
-        url: process.env.TURSO_DATABASE_URL,
-        authToken: process.env.TURSO_AUTH_TOKEN,
-    });
+    let tursoUrl = process.env.TURSO_DATABASE_URL.replace('libsql://', 'https://');
+    if (!tursoUrl.endsWith('/')) tursoUrl += '/';
+    const authToken = process.env.TURSO_AUTH_TOKEN;
 
-    // Inicializamos las tablas automáticamente usando el cliente oficial
-    async function inicializarTablasTursoOficial() {
+    // Función optimizada para enviar consultas HTTP directas a Turso
+    async function tursoQuery(sql, params = []) {
+        const response = await fetch(`${tursoUrl}v2/pipeline`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${authToken}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ 
+                requests: [{ 
+                    type: 'execute', 
+                    stmt: { sql, params: params.map(p => p === undefined ? null : p) } 
+                }] 
+            })
+        });
+
+        if (!response.ok) {
+            const errText = await response.text();
+            throw new Error(`Error en Turso HTTP: ${response.status} - ${errText}`);
+        }
+
+        const data = await response.json();
+        const result = data.results[0];
+        if (result.type === 'error') {
+            throw new Error(`SQL Error: ${result.error.message}`);
+        }
+
+        const cols = result.response.result.cols ? result.response.result.cols.map(c => c.name) : [];
+        const rows = result.response.result.rows ? result.response.result.rows.map(row => {
+            const obj = {};
+            row.forEach((val, index) => {
+                let v = val.value !== undefined ? val.value : val;
+                if (val.type === 'integer') v = Number(v);
+                obj[cols[index]] = v;
+            });
+            return obj;
+        }) : [];
+
+        return {
+            rows,
+            rowsAffected: result.response.result.affected_row_count || 0,
+            lastInsertRowid: result.response.result.last_insert_rowid ? Number(result.response.result.last_insert_rowid) : 0
+        };
+    }
+
+    // Inicializar tablas automáticamente en la nube
+    async function inicializarTablasTurso() {
         try {
-            await client.execute(`CREATE TABLE IF NOT EXISTS clientes (
+            await tursoQuery(`CREATE TABLE IF NOT EXISTS clientes (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 nombre_completo TEXT NOT NULL,
                 tipo_identificacion TEXT,
@@ -27,7 +70,7 @@ if (process.env.TURSO_DATABASE_URL) {
                 fecha_registro DATETIME DEFAULT CURRENT_TIMESTAMP
             )`);
 
-            await client.execute(`CREATE TABLE IF NOT EXISTS servicios (
+            await tursoQuery(`CREATE TABLE IF NOT EXISTS servicios (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 nombre TEXT NOT NULL,
                 descripcion TEXT,
@@ -37,7 +80,7 @@ if (process.env.TURSO_DATABASE_URL) {
                 activo INTEGER DEFAULT 1
             )`);
 
-            await client.execute(`CREATE TABLE IF NOT EXISTS ordenes (
+            await tursoQuery(`CREATE TABLE IF NOT EXISTS ordenes (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 codigo_orden TEXT UNIQUE NOT NULL,
                 cliente_id INTEGER,
@@ -54,7 +97,7 @@ if (process.env.TURSO_DATABASE_URL) {
                 FOREIGN KEY (cliente_id) REFERENCES clientes(id)
             )`);
 
-            await client.execute(`CREATE TABLE IF NOT EXISTS detalle_orden (
+            await tursoQuery(`CREATE TABLE IF NOT EXISTS detalle_orden (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 orden_id INTEGER,
                 servicio_id INTEGER,
@@ -66,7 +109,7 @@ if (process.env.TURSO_DATABASE_URL) {
                 FOREIGN KEY (servicio_id) REFERENCES servicios(id)
             )`);
 
-            await client.execute(`CREATE TABLE IF NOT EXISTS historial_estados (
+            await tursoQuery(`CREATE TABLE IF NOT EXISTS historial_estados (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 orden_id INTEGER,
                 estado_anterior TEXT,
@@ -76,7 +119,7 @@ if (process.env.TURSO_DATABASE_URL) {
                 FOREIGN KEY (orden_id) REFERENCES ordenes(id)
             )`);
 
-            await client.execute(`CREATE TABLE IF NOT EXISTS turnos_caja (
+            await tursoQuery(`CREATE TABLE IF NOT EXISTS turnos_caja (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 monto_apertura REAL NOT NULL,
                 monto_cierre_efectivo REAL,
@@ -87,7 +130,7 @@ if (process.env.TURSO_DATABASE_URL) {
                 observaciones TEXT
             )`);
 
-            await client.execute(`CREATE TABLE IF NOT EXISTS movimientos_caja (
+            await tursoQuery(`CREATE TABLE IF NOT EXISTS movimientos_caja (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 turno_id INTEGER,
                 orden_id INTEGER,
@@ -100,7 +143,7 @@ if (process.env.TURSO_DATABASE_URL) {
                 FOREIGN KEY (orden_id) REFERENCES ordenes(id)
             )`);
 
-            await client.execute(`CREATE TABLE IF NOT EXISTS insumos (
+            await tursoQuery(`CREATE TABLE IF NOT EXISTS insumos (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 nombre TEXT NOT NULL,
                 unidad_medida TEXT NOT NULL,
@@ -109,7 +152,7 @@ if (process.env.TURSO_DATABASE_URL) {
                 costo_unitario REAL DEFAULT 0
             )`);
 
-            await client.execute(`CREATE TABLE IF NOT EXISTS movimientos_inventario (
+            await tursoQuery(`CREATE TABLE IF NOT EXISTS movimientos_inventario (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 insumo_id INTEGER,
                 tipo TEXT NOT NULL,
@@ -119,26 +162,24 @@ if (process.env.TURSO_DATABASE_URL) {
                 FOREIGN KEY (insumo_id) REFERENCES insumos(id)
             )`);
 
-            console.log('¡Tablas de Turso inicializadas perfectamente con el SDK oficial!');
+            console.log('¡Tablas de Turso verificadas e inicializadas correctamente vía HTTP!');
         } catch (e) {
             console.error('Error al inicializar tablas en Turso:', e.message);
         }
     }
 
-    inicializarTablasTursoOficial();
+    inicializarTablasTurso();
 
-    // Adaptador de compatibilidad robusto utilizando el SDK oficial de Turso
+    // Adaptador de compatibilidad idéntico a sqlite3
     db = {
         run: function(sql, params = [], callback) {
             if (typeof params === 'function') {
                 callback = params;
                 params = [];
             }
-            // Asegurar que los parámetros sean un arreglo plano limpio
-            const args = Array.isArray(params) ? params : [params];
-            client.execute({ sql, args })
-                .then(result => {
-                    if (callback) callback.call({ lastID: Number(result.lastInsertRowid || 0), changes: result.rowsAffected || 0 }, null);
+            tursoQuery(sql, params)
+                .then(res => {
+                    if (callback) callback.call({ lastID: res.lastInsertRowid, changes: res.rowsAffected }, null);
                 })
                 .catch(err => {
                     if (callback) callback(err);
@@ -149,10 +190,9 @@ if (process.env.TURSO_DATABASE_URL) {
                 callback = params;
                 params = [];
             }
-            const args = Array.isArray(params) ? params : [params];
-            client.execute({ sql, args })
-                .then(result => {
-                    const row = result.rows.length > 0 ? { ...result.rows[0] } : undefined;
+            tursoQuery(sql, params)
+                .then(res => {
+                    const row = res.rows.length > 0 ? res.rows[0] : undefined;
                     if (callback) callback(null, row);
                 })
                 .catch(err => {
@@ -164,11 +204,9 @@ if (process.env.TURSO_DATABASE_URL) {
                 callback = params;
                 params = [];
             }
-            const args = Array.isArray(params) ? params : [params];
-            client.execute({ sql, args })
-                .then(result => {
-                    const rows = result.rows.map(row => ({ ...row }));
-                    if (callback) callback(null, rows);
+            tursoQuery(sql, params)
+                .then(res => {
+                    if (callback) callback(null, res.rows);
                 })
                 .catch(err => {
                     if (callback) callback(err);
@@ -182,15 +220,15 @@ if (process.env.TURSO_DATABASE_URL) {
                 run: (...args) => {
                     const callback = typeof args[args.length - 1] === 'function' ? args.pop() : null;
                     const params = args;
-                    client.execute({ sql, args: params })
-                        .then(res => callback && callback.call({ lastID: Number(res.lastInsertRowid || 0) }, null))
+                    tursoQuery(sql, params)
+                        .then(res => callback && callback.call({ lastID: res.lastInsertRowid }, null))
                         .catch(err => callback && callback(err));
                 },
                 finalize: () => {}
             };
         }
     };
-    console.log('Adaptador oficial Turso SDK inicializado correctamente.');
+    console.log('Adaptador Turso HTTP Puro inicializado correctamente.');
 } else {
     // Entorno local SQLite tradicional
     const dbPath = path.resolve(__dirname, '../../lavatex_pos.db');
