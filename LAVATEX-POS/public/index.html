@@ -17,12 +17,27 @@
             --border: #e2e8f0;
         }
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-        body { background-color: var(--bg-main); color: var(--text-main); display: flex; min-height: 100vh; }
-        sidebar { width: 260px; background: var(--white); border-right: 1px solid var(--border); display: flex; flex-direction: column; padding: 20px; }
-        .brand { font-size: 22px; font-weight: bold; color: var(--primary); margin-bottom: 30px; display: flex; align-items: center; gap: 10px; }
+        body { background-color: var(--bg-main); color: var(--text-main); display: flex; min-height: 100vh; flex-direction: row; }
+        
+        /* SIDEBAR / MENÚ LATERAL Y HAMBURGUESA */
+        sidebar { 
+            width: 260px; background: var(--white); border-right: 1px solid var(--border); 
+            display: flex; flex-direction: column; padding: 20px; 
+            transition: transform 0.3s ease-in-out; z-index: 1000;
+        }
+        .brand { font-size: 22px; font-weight: bold; color: var(--primary); margin-bottom: 30px; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
         .nav-item { padding: 12px 15px; color: var(--text-muted); text-decoration: none; border-radius: 8px; margin-bottom: 5px; font-weight: 600; cursor: pointer; transition: all 0.2s; display: block; }
         .nav-item.active, .nav-item:hover { background-color: #e0f2fe; color: var(--primary); }
-        .main-content { flex: 1; padding: 30px; overflow-y: auto; }
+        
+        /* BOTÓN MENÚ MÓVIL (HAMBURGUESA) */
+        .mobile-header {
+            display: none; background: var(--white); padding: 15px 20px; border-bottom: 1px solid var(--border);
+            align-items: center; justify-content: space-between; width: 100%; position: fixed; top: 0; left: 0; z-index: 999;
+        }
+        .hamburger-btn { background: none; border: none; font-size: 24px; cursor: pointer; color: var(--primary); }
+
+        .main-content { flex: 1; padding: 30px; overflow-y: auto; width: 100%; }
+        
         .header-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }
         .header-title h1 { font-size: 24px; color: var(--text-main); }
         .header-title p { color: var(--text-muted); font-size: 14px; }
@@ -32,14 +47,24 @@
         .section-view.active { display: block; }
 
         .grid-container { display: grid; grid-template-columns: 1fr 1.5fr; gap: 25px; }
-        @media (max-width: 1024px) { .grid-container { grid-template-columns: 1fr; } }
+        @media (max-width: 1024px) { 
+            body { flex-direction: column; }
+            sidebar { 
+                position: fixed; top: 0; left: -280px; height: 100vh; width: 260px; 
+                box-shadow: 4px 0 15px rgba(0,0,0,0.1); 
+            }
+            sidebar.open { left: 0; }
+            .mobile-header { display: flex; }
+            .main-content { padding: 20px; margin-top: 60px; }
+            .grid-container { grid-template-columns: 1fr; }
+        }
         
-        .card { background: var(--white); border-radius: 12px; padding: 25px; box-shadow: 0 2px 10px rgba(0,0,0,0.04); border: 1px solid var(--border); margin-bottom: 20px; }
+        .card { background: var(--white); border-radius: 12px; padding: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.04); border: 1px solid var(--border); margin-bottom: 20px; }
         .card h2 { font-size: 18px; margin-bottom: 20px; color: var(--text-main); border-bottom: 2px solid var(--border); padding-bottom: 10px; }
         
         .form-group { margin-bottom: 15px; position: relative; }
         .form-group label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 5px; color: var(--text-muted); }
-        .form-control { width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; outline: none; }
+        .form-control { width: 100%; padding: 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; outline: none; }
         .form-control:focus { border-color: var(--primary); }
         
         .dropdown-suggestions {
@@ -47,19 +72,19 @@
             border: 1px solid var(--border); border-radius: 0 0 6px 6px; max-height: 200px;
             overflow-y: auto; z-index: 99; box-shadow: 0 4px 10px rgba(0,0,0,0.1); display: none;
         }
-        .suggestion-item { padding: 10px 12px; cursor: pointer; font-size: 14px; border-bottom: 1px solid #f1f5f9; }
+        .suggestion-item { padding: 12px; cursor: pointer; font-size: 14px; border-bottom: 1px solid #f1f5f9; }
         .suggestion-item:hover { background-color: #e0f2fe; color: var(--primary); font-weight: 600; }
 
-        .btn { background-color: var(--primary); color: white; border: none; padding: 12px 20px; font-size: 14px; border-radius: 6px; cursor: pointer; font-weight: 600; width: 100%; transition: background 0.2s; }
+        .btn { background-color: var(--primary); color: white; border: none; padding: 14px 20px; font-size: 15px; border-radius: 6px; cursor: pointer; font-weight: 600; width: 100%; transition: background 0.2s; }
         .btn:hover { background-color: var(--primary-dark); }
         .btn:disabled { background-color: #94a3b8; cursor: not-allowed; }
-        .btn-wa { background-color: #25d366; color: white; border: none; padding: 6px 10px; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 12px; }
+        .btn-wa { background-color: #25d366; color: white; border: none; padding: 8px 12px; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 13px; }
         .btn-wa:hover { background-color: #1ebc57; }
-        .btn-danger { background-color: #dc2626; color: white; border: none; padding: 6px 10px; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 12px; }
+        .btn-danger { background-color: #dc2626; color: white; border: none; padding: 8px 12px; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 13px; }
         .btn-danger:hover { background-color: #b91c1c; }
 
-        .table-container { overflow-x: auto; }
-        table { width: 100%; border-collapse: collapse; font-size: 14px; }
+        .table-container { overflow-x: auto; width: 100%; }
+        table { width: 100%; border-collapse: collapse; font-size: 14px; white-space: nowrap; }
         th, td { padding: 12px; text-align: left; border-bottom: 1px solid var(--border); }
         th { background-color: #f8fafc; color: var(--text-muted); font-weight: 600; }
         tr:hover { background-color: #f8fafc; }
@@ -74,10 +99,10 @@
 
         #modalTicket {
             display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.5); justify-content: center; align-items: center; z-index: 1000;
+            background: rgba(0,0,0,0.5); justify-content: center; align-items: center; z-index: 1000; padding: 15px;
         }
         .ticket-box {
-            background: white; padding: 20px; border-radius: 8px; width: 340px; font-family: monospace; font-size: 12px;
+            background: white; padding: 20px; border-radius: 8px; width: 100%; max-width: 340px; font-family: monospace; font-size: 12px;
             box-shadow: 0 4px 20px rgba(0,0,0,0.2); text-align: center;
         }
         .ticket-box hr { border: none; border-top: 1px dashed #000; margin: 10px 0; }
@@ -92,8 +117,18 @@
 </head>
 <body>
 
-    <sidebar>
-        <div class="brand">🧺 LAVATEX POS</div>
+    <!-- CABECERA MÓVIL CON MENÚ HAMBURGUESA -->
+    <div class="mobile-header">
+        <div style="font-size: 18px; font-weight: bold; color: var(--primary);">🧺 LAVATEX POS</div>
+        <button class="hamburger-btn" onclick="toggleSidebar()">☰</button>
+    </div>
+
+    <!-- SIDEBAR -->
+    <sidebar id="appSidebar">
+        <div class="brand">
+            <span>🧺 LAVATEX POS</span>
+            <span style="font-size: 18px; cursor: pointer; display: none;" class="close-menu" onclick="toggleSidebar()">✕</span>
+        </div>
         <a class="nav-item active" onclick="cambiarVista('clientes', this)">👥 Clientes</a>
         <a class="nav-item" onclick="cambiarVista('ordenes', this)">📦 Órdenes y Recepción</a>
         <a class="nav-item" onclick="cambiarVista('cobro', this)">💳 Caja de Cobro</a>
@@ -104,13 +139,13 @@
         <a class="nav-item" onclick="cambiarVista('reportes', this)">📈 Reportes y Métricas</a>
     </sidebar>
 
-    <div class="main-content">
+    <div class="main-content" onclick="cerrarSidebarFuera(event)">
         <div class="header-top">
             <div class="header-title">
                 <h1 id="viewTitle">Módulo de Clientes</h1>
                 <p id="viewSubtitle">Gestión de clientes y fichas de contacto</p>
             </div>
-            <div class="status-badge">● Servidor En Línea</div>
+            <div class="status-badge">● En Línea</div>
         </div>
 
         <!-- VISTA CLIENTES -->
@@ -380,11 +415,11 @@
         <div id="vista-reportes" class="section-view">
             <div class="card" style="margin-bottom: 20px;">
                 <h2>Filtrar Reporte de Ventas por Fecha</h2>
-                <div style="display: flex; gap: 15px; align-items: flex-end;">
-                    <div class="form-group" style="flex: 1; margin-bottom: 0;"><label>Desde:</label><input type="date" id="filtroFechaInicio" class="form-control"></div>
-                    <div class="form-group" style="flex: 1; margin-bottom: 0;"><label>Hasta:</label><input type="date" id="filtroFechaFin" class="form-control"></div>
-                    <button class="btn" style="width: auto; padding: 10px 20px;" onclick="cargarReportes()">Filtrar Fechas</button>
-                    <button class="btn" style="width: auto; padding: 10px 20px; background:#166534;" onclick="window.print()">🖨️ Imprimir Reporte</button>
+                <div style="display: flex; gap: 15px; align-items: flex-end; flex-wrap: wrap;">
+                    <div class="form-group" style="flex: 1; min-width: 140px; margin-bottom: 0;"><label>Desde:</label><input type="date" id="filtroFechaInicio" class="form-control"></div>
+                    <div class="form-group" style="flex: 1; min-width: 140px; margin-bottom: 0;"><label>Hasta:</label><input type="date" id="filtroFechaFin" class="form-control"></div>
+                    <button class="btn" style="width: auto; padding: 12px 20px;" onclick="cargarReportes()">Filtrar Fechas</button>
+                    <button class="btn" style="width: auto; padding: 12px 20px; background:#166534;" onclick="window.print()">🖨️ Imprimir</button>
                 </div>
             </div>
 
@@ -434,10 +469,10 @@
             <hr>
             <p style="font-size:11px;">¡Gracias por su preferencia!</p>
             <div style="display: flex; gap: 6px; margin-top: 15px;">
-                <button class="btn no-print" onclick="window.print()" style="background:#166534; flex:1; padding:8px;">🖨️ Imprimir</button>
-                <button class="btn no-print" id="btnWhatsAppTicket" onclick="" style="background:#25d366; flex:1; padding:8px;">📲 WhatsApp</button>
+                <button class="btn no-print" onclick="window.print()" style="background:#166534; flex:1; padding:10px;">🖨️ Imprimir</button>
+                <button class="btn no-print" id="btnWhatsAppTicket" onclick="" style="background:#25d366; flex:1; padding:10px;">📲 WhatsApp</button>
             </div>
-            <button class="btn no-print" onclick="cerrarTicket()" style="margin-top:6px; background:#64748b; padding:8px;">Cerrar Ventana</button>
+            <button class="btn no-print" onclick="cerrarTicket()" style="margin-top:6px; background:#64748b; padding:10px;">Cerrar</button>
         </div>
     </div>
 
@@ -448,11 +483,32 @@
             return Number(valor || 0).toLocaleString('es-CO');
         }
 
+        // Control del menú hamburguesa en móviles
+        function toggleSidebar() {
+            const sidebar = document.getElementById('appSidebar');
+            sidebar.classList.toggle('open');
+        }
+
+        function cerrarSidebarFuera(e) {
+            if(window.innerWidth <= 1024) {
+                const sidebar = document.getElementById('appSidebar');
+                const hamburger = document.querySelector('.mobile-header');
+                if(sidebar.classList.contains('open') && !sidebar.contains(e.target) && !hamburger.contains(e.target)) {
+                    sidebar.classList.remove('open');
+                }
+            }
+        }
+
         function cambiarVista(vista, elemento) {
             document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
             document.querySelectorAll('.section-view').forEach(el => el.classList.remove('active'));
             if(elemento) elemento.classList.add('active');
             
+            // Cerrar menú móvil al seleccionar opción
+            if(window.innerWidth <= 1024) {
+                document.getElementById('appSidebar').classList.remove('open');
+            }
+
             if(vista === 'clientes') {
                 document.getElementById('vista-clientes').classList.add('active');
                 cargarClientes();
@@ -507,7 +563,7 @@
         }
 
         async function eliminarCliente(id) {
-            if(!confirm('¿Está seguro de eliminar este cliente? Esta acción no se puede deshacer.')) return;
+            if(!confirm('¿Está seguro de eliminar este cliente?')) return;
             const res = await fetch(`/api/clientes/${id}`, { method: 'DELETE' });
             const result = await res.json();
             if(res.ok) {
@@ -771,7 +827,7 @@
             }
         }
 
-        // --- LÓGICA DE LA NUEVA PESTAÑA DE COBRO ---
+        // --- LÓGICA DE LA PESTAÑA DE COBRO ---
         async function cargarOrdenesParaCobro() {
             const res = await fetch('/api/ordenes');
             const result = await res.json();
@@ -859,7 +915,6 @@
                 return;
             }
 
-            // Actualizar a estado 'Entregado' y pagar el saldo completo
             const res = await fetch(`/api/ordenes/${ordenId}/estado`, {
                 method: 'PUT',
                 headers: {'Content-Type': 'application/json'},
@@ -872,7 +927,6 @@
                 let vuelto = recibido - orden.saldo;
                 alert(`¡Cobro exitoso!\nCambio / Vueltas: $${formatoMoneda(vuelto)} COP\n¡Cajón abierto y recibo ${orden.codigo_orden} marcado como Entregado!`);
                 
-                // Limpiar formulario
                 document.getElementById('cobro_orden_id').value = '';
                 document.getElementById('inputBuscarCobroRecibo').value = '';
                 document.getElementById('cobro_cliente').value = '';
