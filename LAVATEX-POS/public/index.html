@@ -739,6 +739,23 @@
             }
         }
 
+        function actualizarColorSelectEstado(selectElement) {
+            const val = selectElement.value;
+            if(val === 'Listo para Entrega') {
+                selectElement.style.backgroundColor = '#dcfce7'; // Verde claro
+                selectElement.style.color = '#166534'; // Verde oscuro
+                selectElement.style.fontWeight = 'bold';
+            } else if(val === 'Entregado') {
+                selectElement.style.backgroundColor = '#fee2e2'; // Rojo claro
+                selectElement.style.color = '#991b1b'; // Rojo oscuro
+                selectElement.style.fontWeight = 'bold';
+            } else {
+                selectElement.style.backgroundColor = '#ffffff';
+                selectElement.style.color = '#334155';
+                selectElement.style.fontWeight = 'normal';
+            }
+        }
+
         function renderizarTablaTracking(ordenes) {
             const tbody = document.getElementById('trackingTableBody');
             if(ordenes.length === 0) { tbody.innerHTML = `<tr><td colspan="5" style="text-align: center;">No hay órdenes registradas.</td></tr>`; return; }
@@ -748,7 +765,7 @@
                     <td><strong>${o.codigo_orden}</strong></td>
                     <td>${o.cliente_nombre || 'General'}</td>
                     <td>
-                        <select id="estado_${o.id}" class="form-control" style="padding:4px;">
+                        <select id="estado_${o.id}" class="form-control" style="padding:4px;" onchange="actualizarColorSelectEstado(this)">
                             <option value="Listo para Entrega" ${o.estado === 'Listo para Entrega' ? 'selected' : ''}>Listo para Entrega</option>
                             <option value="Entregado" ${o.estado === 'Entregado' ? 'selected' : ''}>Entregado</option>
                         </select>
@@ -764,6 +781,12 @@
                     </td>
                 </tr>
             `).join('');
+
+            // Aplicar colores iniciales según el estado cargado
+            ordenes.forEach(o => {
+                const sel = document.getElementById(`estado_${o.id}`);
+                if(sel) actualizarColorSelectEstado(sel);
+            });
         }
 
         function filtrarTracking() {
