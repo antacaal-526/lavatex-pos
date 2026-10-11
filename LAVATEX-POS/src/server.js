@@ -1,6 +1,7 @@
 const express = require('express');
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
+const fs = require('fs');
 const cors = require('cors');
 
 const app = express();
@@ -16,13 +17,19 @@ app.get('/', (req, res) => {
     res.sendFile(path.join(publicPath, 'index.html'));
 });
 
-// Base de datos SQLite persistente garantizada en la raíz del proyecto
-const dbPath = path.join(__dirname, '../lavatex_pos.db');
+// Ruta persistente segura en Render o entorno local
+// Si Render tiene un disco persistente montado en /opt/render/project/data, lo usaremos ahí. Si no, usamos la ruta general.
+let dirBaseDatos = path.join(__dirname, '../');
+if (fs.existsSync('/opt/render/project/data')) {
+    dirBaseDatos = '/opt/render/project/data/';
+}
+const dbPath = path.join(dirBaseDatos, 'lavatex_pos.db');
+
 const db = new sqlite3.Database(dbPath, (err) => {
     if (err) {
         console.error('Error al conectar con la base de datos SQLite:', err.message);
     } else {
-        console.log('Conectado a la base de datos SQLite persistente de Lavatex en:', dbPath);
+        console.log('Conectado a la base de datos SQLite persistente en:', dbPath);
         inicializarBaseDatos();
     }
 });
