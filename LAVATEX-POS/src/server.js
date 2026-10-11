@@ -10,8 +10,8 @@ const PORT = process.env.PORT || 3000;
 app.use(express.json());
 app.use(cors());
 
-// Configurar carpeta estática (Busca la carpeta 'public' en la raíz del proyecto)
-const publicPath = path.join(__dirname, 'public');
+// Configuración estática apuntando correctamente a la carpeta public en la raíz (subiendo un nivel desde src)
+const publicPath = path.join(__dirname, '../public');
 app.use(express.static(publicPath));
 
 // Ruta raíz explícita para evitar "Cannot GET /" o "Not Found"
@@ -20,7 +20,7 @@ app.get('/', (req, res) => {
 });
 
 // Base de datos SQLite
-const dbPath = path.resolve(__dirname, 'lavatex_pos.db');
+const dbPath = path.resolve(__dirname, '../lavatex_pos.db');
 const db = new sqlite3.Database(dbPath, (err) => {
     if (err) {
         console.error('Error al conectar con la base de datos SQLite:', err.message);
@@ -307,7 +307,7 @@ app.delete('/api/ordenes/:id', (req, res) => {
     });
 });
 
-// WhatsApp Notificaciones (Dos mensajes diferenciados)
+// WhatsApp Notificaciones
 app.get('/api/ordenes/:id/whatsapp', (req, res) => {
     const { id } = req.params;
     const query = `
