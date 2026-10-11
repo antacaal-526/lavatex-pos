@@ -1,5 +1,5 @@
 const express = require('express');
-const { createClient } = require('@libsql/client');
+const { createClient } = require('@libsql/client/web');
 const path = require('path');
 const cors = require('cors');
 
@@ -16,14 +16,13 @@ app.get('/', (req, res) => {
     res.sendFile(path.join(publicPath, 'index.html'));
 });
 
-// Conexión a Turso Cloud (usando variables de entorno o respaldos locales si estás offline en desarrollo)
+// Conexión a Turso Cloud mediante protocolo HTTP/Web (Compatible con Render)
 const db = createClient({
     url: process.env.TURSO_DATABASE_URL || "file:lavatex_pos.db",
-    authUrl: process.env.TURSO_AUTH_TOKEN ? undefined : undefined,
     authToken: process.env.TURSO_AUTH_TOKEN || undefined
 });
 
-console.log('Conectado a la base de datos en Turso Cloud.');
+console.log('Conectado a la base de datos en Turso Cloud (modo web/http).');
 inicializarBaseDatos();
 
 // Inicializar Tablas en Turso
@@ -49,7 +48,6 @@ async function inicializarBaseDatos() {
             activo INTEGER DEFAULT 1
         )`);
 
-        // Verificar si hay servicios iniciales
         const resServ = await db.execute(`SELECT COUNT(*) as count FROM servicios`);
         if (resServ.rows[0].count === 0) {
             const serviciosIniciales = [
