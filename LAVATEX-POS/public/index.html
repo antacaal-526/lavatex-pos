@@ -151,7 +151,7 @@
 
                         <div class="table-container" style="margin-bottom: 15px;">
                             <table>
-                                <thead><tr><th>Servicio</th><th>Cant</th><th>Subtotal</th><th>X</th></tr></thead>
+                                <thead><tr><th>Servicio / Prenda</th><th>Cant</th><th>Subtotal</th><th>X</th></tr></thead>
                                 <tbody id="itemsOrdenBody"><tr><td colspan="4" style="text-align: center; color: var(--text-muted);">Sin servicios agregados</td></tr></tbody>
                             </table>
                         </div>
@@ -159,7 +159,7 @@
                         <div class="form-group"><label>Descuento ($ COP)</label><input type="number" id="descuentoOrden" value="0" min="0" class="form-control" onchange="calcularTotalesOrden()"></div>
                         <div class="form-group"><label>Abono Inicial ($ COP)</label><input type="number" id="abonoOrden" value="0" min="0" class="form-control" onchange="calcularTotalesOrden()"></div>
                         <div class="form-group"><label>Fecha y Hora Estimada de Entrega (Calendario)</label><input type="datetime-local" id="fechaEntregaOrden" class="form-control"></div>
-                        <div class="form-group"><label>Observaciones</label><input type="text" id="observacionesOrden" class="form-control" placeholder="Ej. Entregar doblado"></div>
+                        <div class="form-group"><label>Observaciones Generales</label><input type="text" id="observacionesOrden" class="form-control" placeholder="Ej. Entregar doblado"></div>
 
                         <div class="resumen-caja">
                             <div class="resumen-row"><span>Subtotal:</span><span id="lblSubtotal">$0 COP</span></div>
@@ -539,7 +539,15 @@
             let cantidad = prompt(`Cantidad o peso para "${serv.nombre}":`, "1");
             if(cantidad === null || isNaN(cantidad) || Number(cantidad) <= 0) return;
 
-            itemsOrdenActual.push({ servicio_id: serv.id, nombre: serv.nombre, cantidad: parseFloat(cantidad), precio_unitario: serv.precio });
+            let observacionPrenda = prompt(`Detalle o tipo de prenda (Ej. 2 Pantalones azules, Chaqueta de cuero, etc.):`, "");
+
+            itemsOrdenActual.push({ 
+                servicio_id: serv.id, 
+                nombre: serv.nombre, 
+                cantidad: parseFloat(cantidad), 
+                precio_unitario: serv.precio,
+                observacion_prenda: observacionPrenda || ''
+            });
             select.value = "";
             renderizarItemsOrden();
         }
@@ -550,8 +558,12 @@
             const tbody = document.getElementById('itemsOrdenBody');
             if(itemsOrdenActual.length === 0) { tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--text-muted);">Sin servicios agregados</td></tr>`; calcularTotalesOrden(); return; }
             tbody.innerHTML = itemsOrdenActual.map((item, index) => `
-                <tr><td>${item.nombre}</td><td>${item.cantidad}</td><td>$${formatoMoneda(item.cantidad * item.precio_unitario)}</td>
-                <td><button type="button" onclick="eliminarItemOrden(${index})" style="background:#dc2626; color:white; border:none; padding:4px 8px; border-radius:4px; cursor:pointer;">X</button></td></tr>
+                <tr>
+                    <td><strong>${item.nombre}</strong>${item.observacion_prenda ? `<br><small style="color:var(--text-muted);">Detalle: ${item.observacion_prenda}</small>` : ''}</td>
+                    <td>${item.cantidad}</td>
+                    <td>$${formatoMoneda(item.cantidad * item.precio_unitario)}</td>
+                    <td><button type="button" onclick="eliminarItemOrden(${index})" style="background:#dc2626; color:white; border:none; padding:4px 8px; border-radius:4px; cursor:pointer;">X</button></td>
+                </tr>
             `).join('');
             calcularTotalesOrden();
         }
@@ -748,7 +760,7 @@
                 document.getElementById('t_codigo').innerText = t.orden.codigo_orden;
                 document.getElementById('t_fecha').innerText = new Date(t.orden.fecha_recepcion).toLocaleString();
                 document.getElementById('t_cliente').innerText = `Cliente: ${t.orden.cliente_nombre || 'General'}\nCédula: ${t.orden.cliente_cedula || 'N/A'}\nTel: ${t.orden.cliente_telefono || 'N/A'}`;
-                document.getElementById('t_items').innerHTML = t.items.map(i => `<p>${i.cantidad} ${i.servicio_nombre} = $${formatoMoneda(i.subtotal_item)} COP</p>`).join('');
+                document.getElementById('t_items').innerHTML = t.items.map(i => `<p>${i.cantidad}x ${i.servicio_nombre}${i.observacion_prenda ? ' ('+i.observacion_prenda+')' : ''} = $${formatoMoneda(i.subtotal_item)} COP</p>`).join('');
                 document.getElementById('t_subtotal').innerText = `Subtotal: $${formatoMoneda(t.orden.subtotal)} COP`;
                 document.getElementById('t_total').innerText = `TOTAL: $${formatoMoneda(t.orden.total)} COP`;
                 document.getElementById('t_abono').innerText = `Abono: $${formatoMoneda(t.orden.abono)} COP`;
