@@ -19,7 +19,6 @@
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
         body { background-color: var(--bg-main); color: var(--text-main); display: flex; min-height: 100vh; flex-direction: row; }
         
-        /* SIDEBAR / MENÚ LATERAL Y HAMBURGUESA */
         sidebar { 
             width: 260px; background: var(--white); border-right: 1px solid var(--border); 
             display: flex; flex-direction: column; padding: 20px; 
@@ -29,7 +28,6 @@
         .nav-item { padding: 12px 15px; color: var(--text-muted); text-decoration: none; border-radius: 8px; margin-bottom: 5px; font-weight: 600; cursor: pointer; transition: all 0.2s; display: block; }
         .nav-item.active, .nav-item:hover { background-color: #e0f2fe; color: var(--primary); }
         
-        /* BOTÓN MENÚ MÓVIL (HAMBURGUESA) */
         .mobile-header {
             display: none; background: var(--white); padding: 15px 20px; border-bottom: 1px solid var(--border);
             align-items: center; justify-content: space-between; width: 100%; position: fixed; top: 0; left: 0; z-index: 999;
@@ -117,13 +115,11 @@
 </head>
 <body>
 
-    <!-- CABECERA MÓVIL CON MENÚ HAMBURGUESA -->
     <div class="mobile-header">
         <div style="font-size: 18px; font-weight: bold; color: var(--primary);">🧺 LAVATEX POS</div>
         <button class="hamburger-btn" onclick="toggleSidebar()">☰</button>
     </div>
 
-    <!-- SIDEBAR -->
     <sidebar id="appSidebar">
         <div class="brand">
             <span>🧺 LAVATEX POS</span>
@@ -450,12 +446,14 @@
 
     </div>
 
-    <!-- MODAL VISTA PREVIA TICKET -->
+    <!-- MODAL VISTA PREVIA TICKET CON LOS DATOS NUEVOS -->
     <div id="modalTicket">
         <div class="ticket-box">
             <h2 style="font-size:16px;">LAVANDERÍA LAVATEX</h2>
+            <p>NIT: 6765247-7</p>
+            <p>Calle 19A # 10-81 Pasaje de Vargas</p>
             <p>Tunja, Boyacá - Colombia</p>
-            <p>Tel: 310 000 0000</p>
+            <p>Tel: 3167686692</p>
             <hr>
             <p id="t_codigo" style="font-weight:bold; font-size:14px;"></p>
             <p id="t_fecha"></p>
@@ -483,7 +481,6 @@
             return Number(valor || 0).toLocaleString('es-CO');
         }
 
-        // Control del menú hamburguesa en móviles
         function toggleSidebar() {
             const sidebar = document.getElementById('appSidebar');
             sidebar.classList.toggle('open');
@@ -504,7 +501,6 @@
             document.querySelectorAll('.section-view').forEach(el => el.classList.remove('active'));
             if(elemento) elemento.classList.add('active');
             
-            // Cerrar menú móvil al seleccionar opción
             if(window.innerWidth <= 1024) {
                 document.getElementById('appSidebar').classList.remove('open');
             }
@@ -827,7 +823,6 @@
             }
         }
 
-        // --- LÓGICA DE LA PESTAÑA DE COBRO ---
         async function cargarOrdenesParaCobro() {
             const res = await fetch('/api/ordenes');
             const result = await res.json();
@@ -942,7 +937,6 @@
             }
         }
 
-        // --- TRAZABILIDAD ---
         async function cargarDatosTracking() {
             const res = await fetch('/api/ordenes');
             const result = await res.json();

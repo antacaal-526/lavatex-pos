@@ -6,20 +6,17 @@ const cors = require('cors');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Middleware
 app.use(express.json());
 app.use(cors());
 
-// Configuración estática apuntando correctamente a la carpeta public en la raíz
 const publicPath = path.join(__dirname, '../public');
 app.use(express.static(publicPath));
 
-// Ruta raíz explícita
 app.get('/', (req, res) => {
     res.sendFile(path.join(publicPath, 'index.html'));
 });
 
-// Base de datos SQLite
+// Base de datos SQLite persistente
 const dbPath = path.resolve(__dirname, '../lavatex_pos.db');
 const db = new sqlite3.Database(dbPath, (err) => {
     if (err) {
@@ -30,7 +27,7 @@ const db = new sqlite3.Database(dbPath, (err) => {
     }
 });
 
-// Inicializar Tablas y Servicios por Defecto
+// Inicializar Tablas sin destruir información existente
 function inicializarBaseDatos() {
     db.serialize(() => {
         db.run(`CREATE TABLE IF NOT EXISTS clientes (
@@ -219,7 +216,7 @@ app.get('/api/ordenes', (req, res) => {
 });
 
 app.post('/api/ordenes', (req, res) => {
-    const { cliente_id, items, abono, fecha_entrega_estimada, observations, observaciones } = req.body;
+    const { cliente_id, items, abono, fecha_entrega_estimada, observaciones } = req.body;
     if (!items || items.length === 0) {
         return res.status(400).json({ status: 'error', message: 'La orden debe contener al menos un servicio.' });
     }
@@ -227,7 +224,7 @@ app.post('/api/ordenes', (req, res) => {
     let total = items.reduce((acc, item) => acc + (parseFloat(item.subtotal_item) || 0), 0);
     let abonoNum = parseFloat(abono) || 0;
     let saldo = Math.max(0, total - abonoNum);
-    let obsGenerales = observaciones || observations || '';
+    let obsGenerales = observaciones || '';
 
     db.serialize(() => {
         db.get(`SELECT MAX(id) as max_id FROM ordenes`, [], (err, row) => {
@@ -338,7 +335,6 @@ app.get('/api/ordenes/:id/whatsapp', (req, res) => {
             if (err) return res.status(500).json({ status: 'error', message: err.message });
 
             let telefonoLimpio = orden.cliente_telefono.replace(/\D/g, '');
-            
             let detallePrendas = items.map(i => {
                 let desc = `- ${i.cantidad} ${i.servicio_nombre}`;
                 if (i.observacion_prenda && i.observacion_prenda.trim() !== '') {
@@ -347,14 +343,7 @@ app.get('/api/ordenes/:id/whatsapp', (req, res) => {
                 return desc;
             }).join('\n');
 
-            let mensaje = '';
-            let estadoActual = (orden.estado || '').trim().toLowerCase();
-
-            if (estadoActual === 'listo para entrega' || estadoActual === 'entregado') {
-                mensaje = `🧺 LAVANDERÍA LAVATEX\n\n¡Hola ${orden.cliente_nombre}! Su recibo *${orden.codigo_orden}* ya está listo para recoger.\n\n📋 Detalle de prendas:\n${detallePrendas}\n\n💰 Total a Pagar: $${Number(orden.total).toLocaleString('es-CO')} COP\n💵 Abono Inicial: $${Number(orden.abono).toLocaleString('es-CO')} COP\n🔴 Saldo Pendiente: $${Number(orden.saldo).toLocaleString('es-CO')} COP\n\n¡Lo esperamos!`;
-            } else {
-                mensaje = `🧺 LAVANDERÍA LAVATEX\n\n¡Hola ${orden.cliente_nombre}! Hemos recibido su recibo *${orden.codigo_orden}*.\n\n📋 Detalle de prendas:\n${detallePrendas}\n\n💰 Total a Pagar: $${Number(orden.total).toLocaleString('es-CO')} COP\n💵 Abono Inicial: $${Number(orden.abono).toLocaleString('es-CO')} COP\n🔴 Saldo Pendiente: $${Number(orden.saldo).toLocaleString('es-CO')} COP\n\n¡Gracias por su preferencia!`;
-            }
+            let mensaje = `🧺 LAVANDERÍA LAVATEX\n\n¡Hola ${orden.cliente_nombre}! Su recibo *${orden.codigo_orden}* está listo.\n\n📋 Detalle:\n${detallePrendas}\n\n💰 Total: $${Number(orden.total).toLocaleString('es-CO')} COP\n💵 Abono: $${Number(orden.abono).toLocaleString('es-CO')} COP\n🔴 Saldo: $${Number(orden.saldo).toLocaleString('es-CO')} COP\n\n¡Lo esperamos en Calle 19A # 10-81 Pasaje de Vargas!`;
 
             let urlWhatsapp = `https://api.whatsapp.com/send?phone=57${telefonoLimpio}&text=${encodeURIComponent(mensaje)}`;
             res.json({ status: 'success', urlWhatsapp });
