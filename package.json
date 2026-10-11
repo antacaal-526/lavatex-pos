@@ -5,14 +5,10 @@
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
-    "dev": "nodemon src/server.js",
-    "backup": "node -e \"require('fs').copyFileSync('lavatex_pos.db', 'backup_' + new Date().toISOString().slice(0,10) + '.db'); console.log('¡Respaldo de base de datos generado con éxito!');\""
+    "dev": "nodemon src/server.js"
   },
-  "keywords": [],
-  "author": "Anthony Cardenas",
-  "license": "ISC",
   "dependencies": {
-    "@libsql/client": "^0.18.0",
+    "@libsql/client": "^0.14.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
