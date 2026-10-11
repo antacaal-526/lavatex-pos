@@ -10,11 +10,11 @@ const PORT = process.env.PORT || 3000;
 app.use(express.json());
 app.use(cors());
 
-// Configuración estática apuntando correctamente a la carpeta public en la raíz (subiendo un nivel desde src)
+// Configuración estática apuntando correctamente a la carpeta public en la raíz
 const publicPath = path.join(__dirname, '../public');
 app.use(express.static(publicPath));
 
-// Ruta raíz explícita para evitar "Cannot GET /" o "Not Found"
+// Ruta raíz explícita
 app.get('/', (req, res) => {
     res.sendFile(path.join(publicPath, 'index.html'));
 });
@@ -30,7 +30,7 @@ const db = new sqlite3.Database(dbPath, (err) => {
     }
 });
 
-// Inicializar Tablas
+// Inicializar Tablas y Servicios por Defecto
 function inicializarBaseDatos() {
     db.serialize(() => {
         db.run(`CREATE TABLE IF NOT EXISTS clientes (
@@ -51,7 +51,23 @@ function inicializarBaseDatos() {
             precio REAL NOT NULL,
             tiempo_estimado_horas INTEGER DEFAULT 24,
             activo INTEGER DEFAULT 1
-        )`);
+        )`, () => {
+            // Verificar si hay servicios precargados, si no, agregarlos como ejemplo
+            db.get(`SELECT COUNT(*) as count FROM servicios`, [], (err, row) => {
+                if (row && row.count === 0) {
+                    const serviciosIniciales = [
+                        ['CUB', 'CUBRELECHO', 'Lavado y desinfección de cubrecama', 'unidad', 20000, 24],
+                        ['PH', 'PANTALON HOMBRE', 'Lavado y planchado', 'unidad', 8000, 24],
+                        ['CH', 'CAMISA HOMBRE', 'Lavado y planchado', 'unidad', 7000, 24],
+                        ['JNB', 'JEAN / PANTALON', 'Lavado en seco / agua', 'unidad', 9000, 24],
+                        ['COB', 'COBIJA / FRAZADA', 'Lavado profundo', 'unidad', 15000, 24]
+                    ];
+                    const stmt = db.prepare(`INSERT INTO servicios (codigo, nombre, descripcion, unidad_cobro, precio, tiempo_estimado_horas, activo) VALUES (?, ?, ?, ?, ?, ?, 1)`);
+                    serviciosIniciales.forEach(s => stmt.run(s));
+                    stmt.finalize();
+                }
+            });
+        });
 
         db.run(`CREATE TABLE IF NOT EXISTS ordenes (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -307,30 +323,44 @@ app.delete('/api/ordenes/:id', (req, res) => {
     });
 });
 
-// WhatsApp Notificaciones
+// WhatsApp Notificaciones (Ambos mensajes con detalle completo de prendas)
 app.get('/api/ordenes/:id/whatsapp', (req, res) => {
     const { id } = req.params;
-    const query = `
+    const qOrden = `
         SELECT o.*, c.nombre_completo as cliente_nombre, c.telefono as cliente_telefono 
         FROM ordenes o 
         LEFT JOIN clientes c ON o.cliente_id = c.id 
         WHERE o.id = ?
     `;
-    db.get(query, [id], (err, orden) => {
+    db.get(qOrden, [id], (err, orden) => {
         if (err || !orden) return res.status(404).json({ status: 'error', message: 'Orden no encontrada' });
         if (!orden.cliente_telefono) return res.status(400).json({ status: 'error', message: 'El cliente no tiene teléfono registrado.' });
 
-        let telefonoLimpio = orden.cliente_telefono.replace(/\D/g, '');
-        let mensaje = '';
+        db.all(`SELECT oi.*, s.nombre as servicio_nombre FROM orden_items oi LEFT JOIN servicios s ON oi.servicio_id = s.id WHERE oi.orden_id = ?`, [id], (err, items) => {
+            if (err) return res.status(500).json({ status: 'error', message: err.message });
 
-        if (orden.estado === 'Listo para Entrega' || orden.estado === 'Entregado') {
-            mensaje = `Hola ${orden.cliente_nombre}, le saludamos de Lavandería Lavatex. Su orden ${orden.codigo_orden} ya está lista. Ya puede pasar a recoger sus prendas. Total pendiente: $${Number(orden.saldo).toLocaleString('es-CO')} COP. ¡Lo esperamos!`;
-        } else {
-            mensaje = `Hola ${orden.cliente_nombre}, le saludamos de Lavandería Lavatex. Hemos recibido su orden ${orden.codigo_orden} por un total de $${Number(orden.total).toLocaleString('es-CO')} COP. ¡Gracias por su preferencia!`;
-        }
+            let telefonoLimpio = orden.cliente_telefono.replace(/\D/g, '');
+            
+            // Construir el detalle de prendas con sus observaciones
+            let detallePrendas = items.map(i => {
+                let desc = `- ${i.cantidad} ${i.servicio_nombre}`;
+                if (i.observacion_prenda && i.observacion_prenda.trim() !== '') {
+                    desc += ` (${i.observacion_prenda})`;
+                }
+                return desc;
+            }).join('\n');
 
-        let urlWhatsapp = `https://api.whatsapp.com/send?phone=57${telefonoLimpio}&text=${encodeURIComponent(mensaje)}`;
-        res.json({ status: 'success', urlWhatsapp });
+            let mensaje = '';
+
+            if (orden.estado === 'Listo para Entrega' || orden.estado === 'Entregado') {
+                mensaje = `🧺 LAVANDERÍA LAVATEX\n\n¡Hola ${orden.cliente_nombre}! Su orden *${orden.codigo_orden}* ya está lista para recoger.\n\n📋 Detalle:\n${detallePrendas}\n\n💰 Total: $${Number(orden.total).toLocaleString('es-CO')} COP\n💵 Abono: $${Number(orden.abono).toLocaleString('es-CO')} COP\n🔴 Saldo Pendiente: $${Number(orden.saldo).toLocaleString('es-CO')} COP\n\n¡Lo esperamos!`;
+            } else {
+                mensaje = `🧺 LAVANDERÍA LAVATEX\n\n¡Hola ${orden.cliente_nombre}! Hemos recibido su pedido *${orden.codigo_orden}*.\n\n📋 Detalle de prendas:\n${detallePrendas}\n\n💰 Total a Pagar: $${Number(orden.total).toLocaleString('es-CO')} COP\n💵 Abono Inicial: $${Number(orden.abono).toLocaleString('es-CO')} COP\n🔴 Saldo Pendiente: $${Number(orden.saldo).toLocaleString('es-CO')} COP\n\n¡Gracias por su preferencia!`;
+            }
+
+            let urlWhatsapp = `https://api.whatsapp.com/send?phone=57${telefonoLimpio}&text=${encodeURIComponent(mensaje)}`;
+            res.json({ status: 'success', urlWhatsapp });
+        });
     });
 });
 
