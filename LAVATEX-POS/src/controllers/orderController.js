@@ -1,277 +1,250 @@
-const sqlite3 = require('sqlite3').verbose();
-const path = require('path');
+const db = require('../config/database');
 
-let db;
+const obtenerServicios = (req, res) => {
+    const admin = req.query.admin === 'true';
+    const query = admin ? `SELECT * FROM servicios ORDER BY nombre ASC` : `SELECT * FROM servicios WHERE activo = 1 ORDER BY nombre ASC`;
+    
+    db.all(query, [], (err, rows) => {
+        if (err) return res.status(500).json({ status: 'error', message: err.message });
+        res.json({ status: 'success', data: rows });
+    });
+};
 
-if (process.env.TURSO_DATABASE_URL) {
-    let tursoUrl = process.env.TURSO_DATABASE_URL.replace('libsql://', 'https://');
-    if (!tursoUrl.endsWith('/')) tursoUrl += '/';
-    const authToken = process.env.TURSO_AUTH_TOKEN;
+const crearServicio = (req, res) => {
+    const { codigo, nombre, descripcion, unidad_cobro, precio, tiempo_estimado_horas } = req.body;
+    if (!nombre || precio === undefined || !unidad_cobro) {
+        return res.status(400).json({ status: 'error', message: 'El nombre, precio y unidad de cobro son obligatorios.' });
+    }
+    const codigoAbrev = codigo ? codigo.toUpperCase().trim() : nombre.slice(0, 3).toUpperCase();
+    const query = `INSERT INTO servicios (codigo, nombre, descripcion, unidad_cobro, precio, tiempo_estimado_horas, activo) VALUES (?, ?, ?, ?, ?, ?, 1)`;
+    db.run(query, [codigoAbrev, nombre, descripcion || '', unidad_cobro, parseFloat(precio), parseInt(tiempo_estimado_horas) || 24], function(err) {
+        if (err) return res.status(500).json({ status: 'error', message: err.message });
+        res.status(201).json({ status: 'success', message: 'Servicio creado exitosamente.', servicioId: this.lastID });
+    });
+};
 
-    // Función robusta con tipado estricto para Turso HTTP
-    async function tursoQuery(sql, params = []) {
-        // Mapeo estricto de tipos requerido por la API HTTP de Turso v2
-        const formattedParams = params.map(p => {
-            if (p === null || p === undefined) {
-                return { type: 'null' };
-            } else if (typeof p === 'number') {
-                return { type: Number.isInteger(p) ? 'integer' : 'float', value: p.toString() };
-            } else if (typeof p === 'boolean') {
-                return { type: 'integer', value: p ? '1' : '0' };
-            } else {
-                return { type: 'text', value: p.toString() };
-            }
-        });
+const actualizarServicio = (req, res) => {
+    const { id } = req.params;
+    const { codigo, nombre, descripcion, unidad_cobro, precio, tiempo_estimado_horas, activo } = req.body;
 
-        const response = await fetch(`${tursoUrl}v2/pipeline`, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${authToken}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ 
-                requests: [{ 
-                    type: 'execute', 
-                    stmt: { sql, args: formattedParams } 
-                }] 
-            })
-        });
+    if (!nombre || precio === undefined || !unidad_cobro) {
+        return res.status(400).json({ status: 'error', message: 'El nombre, precio y unidad de cobro son obligatorios.' });
+    }
 
-        if (!response.ok) {
-            const errText = await response.text();
-            throw new Error(`Error en Turso HTTP: ${response.status}\n${errText}`);
-        }
+    const codigoAbrev = codigo ? codigo.toUpperCase().trim() : nombre.slice(0, 3).toUpperCase();
+    const query = `UPDATE servicios SET codigo = ?, nombre = ?, descripcion = ?, unidad_cobro = ?, precio = ?, tiempo_estimado_horas = ?, activo = ? WHERE id = ?`;
+    db.run(query, [codigoAbrev, nombre, descripcion || '', unidad_cobro, parseFloat(precio), parseInt(tiempo_estimado_horas) || 24, activo !== undefined ? activo : 1, id], function(err) {
+        if (err) return res.status(500).json({ status: 'error', message: err.message });
+        res.json({ status: 'success', message: 'Servicio actualizado correctamente.' });
+    });
+};
 
-        const data = await response.json();
-        const result = data.results[0];
-        if (result.type === 'error') {
-            throw new Error(`SQL Error: ${result.error.message}`);
-        }
+const eliminarServicio = (req, res) => {
+    const { id } = req.params;
 
-        const cols = result.response.result.cols ? result.response.result.cols.map(c => c.name) : [];
-        const rows = result.response.result.rows ? result.response.result.rows.map(row => {
-            const obj = {};
-            row.forEach((val, index) => {
-                let v = val.value !== undefined ? val.value : val;
-                if (val.type === 'integer') v = Number(v);
-                obj[cols[index]] = v;
+    db.get(`SELECT COUNT(*) as count FROM detalle_orden WHERE servicio_id = ?`, [id], (err, row) => {
+        if (err) return res.status(500).json({ status: 'error', message: err.message });
+
+        if (row.count > 0) {
+            db.run(`UPDATE servicios SET activo = 0 WHERE id = ?`, [id], (errUp) => {
+                if (errUp) return res.status(500).json({ status: 'error', message: errUp.message });
+                res.json({ status: 'success', message: 'El servicio tiene pedidos históricos asociados. Ha sido DESACTIVADO exitosamente.' });
             });
-            return obj;
-        }) : [];
-
-        return {
-            rows,
-            rowsAffected: result.response.result.affected_row_count || 0,
-            lastInsertRowid: result.response.result.last_insert_rowid ? Number(result.response.result.last_insert_rowid) : 0
-        };
-    }
-
-    // Inicializar tablas automáticamente en la nube con soporte para 'codigo'
-    async function inicializarTablasTurso() {
-        try {
-            await tursoQuery(`CREATE TABLE IF NOT EXISTS clientes (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                nombre_completo TEXT NOT NULL,
-                tipo_identificacion TEXT,
-                numero_identificacion TEXT UNIQUE,
-                telefono TEXT NOT NULL,
-                correo TEXT,
-                direccion TEXT,
-                barrio TEXT,
-                observaciones TEXT,
-                preferencias TEXT,
-                fecha_registro DATETIME DEFAULT CURRENT_TIMESTAMP
-            )`);
-
-            await tursoQuery(`CREATE TABLE IF NOT EXISTS servicios (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                codigo TEXT,
-                nombre TEXT NOT NULL,
-                descripcion TEXT,
-                unidad_cobro TEXT NOT NULL,
-                precio REAL NOT NULL,
-                tiempo_estimado_horas INTEGER DEFAULT 24,
-                activo INTEGER DEFAULT 1
-            )`);
-
-            // Asegurar columna codigo si la tabla ya existía
-            try {
-                await tursoQuery(`ALTER TABLE servicios ADD COLUMN codigo TEXT`);
-            } catch (e) {
-                // La columna ya existe, se puede ignorar
-            }
-
-            await tursoQuery(`CREATE TABLE IF NOT EXISTS ordenes (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                codigo_orden TEXT UNIQUE NOT NULL,
-                cliente_id INTEGER,
-                subtotal REAL NOT NULL,
-                descuento REAL DEFAULT 0,
-                total REAL NOT NULL,
-                abono REAL DEFAULT 0,
-                saldo REAL NOT NULL,
-                estado TEXT DEFAULT 'Recibido',
-                ubicacion_fisica TEXT DEFAULT 'Estantería Principal',
-                fecha_recepcion DATETIME DEFAULT CURRENT_TIMESTAMP,
-                fecha_entrega_estimada DATETIME,
-                observaciones TEXT,
-                FOREIGN KEY (cliente_id) REFERENCES clientes(id)
-            )`);
-
-            await tursoQuery(`CREATE TABLE IF NOT EXISTS detalle_orden (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                orden_id INTEGER,
-                servicio_id INTEGER,
-                cantidad REAL NOT NULL,
-                precio_unitario REAL NOT NULL,
-                subtotal_item REAL NOT NULL,
-                observacion_prenda TEXT,
-                FOREIGN KEY (orden_id) REFERENCES ordenes(id),
-                FOREIGN KEY (servicio_id) REFERENCES servicios(id)
-            )`);
-
-            await tursoQuery(`CREATE TABLE IF NOT EXISTS historial_estados (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                orden_id INTEGER,
-                estado_anterior TEXT,
-                estado_nuevo TEXT NOT NULL,
-                observacion TEXT,
-                fecha_cambio DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (orden_id) REFERENCES ordenes(id)
-            )`);
-
-            await tursoQuery(`CREATE TABLE IF NOT EXISTS turnos_caja (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                monto_apertura REAL NOT NULL,
-                monto_cierre_efectivo REAL,
-                diferencia REAL,
-                estado TEXT DEFAULT 'ABIERTA',
-                fecha_apertura DATETIME DEFAULT CURRENT_TIMESTAMP,
-                fecha_cierre DATETIME,
-                observaciones TEXT
-            )`);
-
-            await tursoQuery(`CREATE TABLE IF NOT EXISTS movimientos_caja (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                turno_id INTEGER,
-                orden_id INTEGER,
-                tipo TEXT NOT NULL,
-                monto REAL NOT NULL,
-                metodo_pago TEXT DEFAULT 'Efectivo',
-                concepto TEXT,
-                fecha DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (turno_id) REFERENCES turnos_caja(id),
-                FOREIGN KEY (orden_id) REFERENCES ordenes(id)
-            )`);
-
-            await tursoQuery(`CREATE TABLE IF NOT EXISTS insumos (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                nombre TEXT NOT NULL,
-                unidad_medida TEXT NOT NULL,
-                stock_actual REAL DEFAULT 0,
-                stock_minimo REAL DEFAULT 5,
-                costo_unitario REAL DEFAULT 0
-            )`);
-
-            await tursoQuery(`CREATE TABLE IF NOT EXISTS movimientos_inventario (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                insumo_id INTEGER,
-                tipo TEXT NOT NULL,
-                cantidad REAL NOT NULL,
-                motivo TEXT,
-                fecha DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (insumo_id) REFERENCES insumos(id)
-            )`);
-
-            console.log('¡Tablas verificadas en Turso con tipado estricto, clave args y columna codigo!');
-        } catch (e) {
-            console.error('Error al inicializar tablas en Turso:', e.message);
-        }
-    }
-
-    inicializarTablasTurso();
-
-    // Adaptador de compatibilidad
-    db = {
-        run: function(sql, params = [], callback) {
-            if (typeof params === 'function') {
-                callback = params;
-                params = [];
-            }
-            tursoQuery(sql, params)
-                .then(res => {
-                    if (callback) callback.call({ lastID: res.lastInsertRowid, changes: res.rowsAffected }, null);
-                })
-                .catch(err => {
-                    if (callback) callback(err);
-                });
-        },
-        get: function(sql, params = [], callback) {
-            if (typeof params === 'function') {
-                callback = params;
-                params = [];
-            }
-            tursoQuery(sql, params)
-                .then(res => {
-                    const row = res.rows.length > 0 ? res.rows[0] : undefined;
-                    if (callback) callback(null, row);
-                })
-                .catch(err => {
-                    if (callback) callback(err);
-                });
-        },
-        all: function(sql, params = [], callback) {
-            if (typeof params === 'function') {
-                callback = params;
-                params = [];
-            }
-            tursoQuery(sql, params)
-                .then(res => {
-                    if (callback) callback(null, res.rows);
-                })
-                .catch(err => {
-                    if (callback) callback(err);
-                });
-        },
-        serialize: function(cb) {
-            if (cb) cb();
-        },
-        prepare: function(sql) {
-            return {
-                run: (...args) => {
-                    const callback = typeof args[args.length - 1] === 'function' ? args.pop() : null;
-                    const params = args;
-                    tursoQuery(sql, params)
-                        .then(res => callback && callback.call({ lastID: res.lastInsertRowid }, null))
-                        .catch(err => callback && callback(err));
-                },
-                finalize: () => {}
-            };
-        }
-    };
-    console.log('Adaptador Turso HTTP con clave args activo.');
-} else {
-    const dbPath = path.resolve(__dirname, '../../lavatex_pos.db');
-    db = new sqlite3.Database(dbPath, (err) => {
-        if (err) {
-            console.error('Error al conectar con SQLite local:', err.message);
         } else {
-            console.log('Base de datos SQLite local conectada en:', dbPath);
-            // Inicializar tabla local con columna codigo si no existe
-            db.run(`CREATE TABLE IF NOT EXISTS servicios (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                codigo TEXT,
-                nombre TEXT NOT NULL,
-                descripcion TEXT,
-                unidad_cobro TEXT NOT NULL,
-                precio REAL NOT NULL,
-                tiempo_estimado_horas INTEGER DEFAULT 24,
-                activo INTEGER DEFAULT 1
-            )`, () => {
-                db.run(`ALTER TABLE servicios ADD COLUMN codigo TEXT`, () => {});
+            db.run(`DELETE FROM servicios WHERE id = ?`, [id], (errDel) => {
+                if (errDel) return res.status(500).json({ status: 'error', message: errDel.message });
+                res.json({ status: 'success', message: 'Servicio eliminado permanentemente.' });
             });
         }
     });
-}
+};
 
-module.exports = db;
+const obtenerOrdenes = (req, res) => {
+    const query = `
+        SELECT o.*, c.nombre_completo as cliente_nombre, c.telefono as cliente_telefono, c.numero_identificacion as cliente_cedula 
+        FROM ordenes o 
+        LEFT JOIN clientes c ON o.cliente_id = c.id 
+        ORDER BY o.id DESC LIMIT 100
+    `;
+    db.all(query, [], (err, rows) => {
+        if (err) return res.status(500).json({ status: 'error', message: err.message });
+        res.json({ status: 'success', data: rows });
+    });
+};
+
+const crearOrden = (req, res) => {
+    const { cliente_id, items, abono = 0, observaciones = '', fecha_entrega_estimada } = req.body;
+
+    if (!cliente_id || !items || items.length === 0) {
+        return res.status(400).json({ status: 'error', message: 'Debe seleccionar un cliente y al menos un servicio.' });
+    }
+
+    const ahora = new Date();
+    const fechaStr = ahora.toISOString().slice(0, 10).replace(/-/g, '');
+    const timestampUnico = ahora.getTime().toString().slice(-4);
+    const codigo_orden = `ORD-${fechaStr}-${timestampUnico}`;
+
+    let subtotal = 0;
+    items.forEach(item => { subtotal += parseFloat(item.subtotal_item) || 0; });
+
+    const total = subtotal;
+    const montoAbono = parseFloat(abono) || 0;
+    const saldo = Math.max(0, total - montoAbono);
+    
+    let fechaEntrega = fecha_entrega_estimada ? new Date(fecha_entrega_estimada) : new Date();
+    if (!fecha_entrega_estimada) fechaEntrega.setHours(fechaEntrega.getHours() + 24);
+
+    const queryOrden = `INSERT INTO ordenes (codigo_orden, cliente_id, subtotal, descuento, total, abono, saldo, fecha_entrega_estimada, observaciones, estado) 
+                        VALUES (?, ?, ?, 0, ?, ?, ?, ?, ?, 'Recibido')`;
+    
+    db.run(queryOrden, [codigo_orden, cliente_id, total, total, montoAbono, saldo, fechaEntrega.toISOString(), observaciones], function(err) {
+        if (err) {
+            return res.status(500).json({ status: 'error', message: err.message });
+        }
+
+        const ordenId = this.lastID;
+        let index = 0;
+
+        function insertarSiguienteItem() {
+            if (index >= items.length) {
+                if (montoAbono > 0) {
+                    db.get(`SELECT id FROM turnos_caja WHERE estado = 'ABIERTA' ORDER BY id DESC LIMIT 1`, [], (errCaja, turno) => {
+                        if (turno) {
+                            db.run(`INSERT INTO movimientos_caja (turno_id, orden_id, tipo, monto, concepto) VALUES (?, ?, 'INGRESO_ABONO', ?, ?)`,
+                                [turno.id, ordenId, montoAbono, `Abono inicial orden ${codigo_orden}`]);
+                        }
+                    });
+                }
+
+                return res.status(201).json({ 
+                    status: 'success', 
+                    message: 'Orden creada exitosamente.', 
+                    ordenId, 
+                    codigo_orden 
+                });
+            }
+
+            const item = items[index];
+            const subItem = parseFloat(item.subtotal_item) || 0;
+            const queryDetalle = `INSERT INTO detalle_orden (orden_id, servicio_id, cantidad, precio_unitario, subtotal_item, observacion_prenda) VALUES (?, ?, ?, ?, ?, ?)`;
+            
+            db.run(queryDetalle, [ordenId, item.servicio_id, item.cantidad, item.precio_unitario, subItem, item.observacion_prenda || ''], (errDet) => {
+                if (errDet) {
+                    return res.status(500).json({ status: 'error', message: errDet.message });
+                }
+                index++;
+                insertarSiguienteItem();
+            });
+        }
+
+        insertarSiguienteItem();
+    });
+};
+
+const eliminarOrden = (req, res) => {
+    const { id } = req.params;
+    db.serialize(() => {
+        db.run(`DELETE FROM detalle_orden WHERE orden_id = ?`, [id], () => {
+            db.run(`DELETE FROM movimientos_caja WHERE orden_id = ?`, [id], () => {
+                db.run(`DELETE FROM historial_estados WHERE orden_id = ?`, [id], () => {
+                    db.run(`DELETE FROM ordenes WHERE id = ?`, [id], (errOrd) => {
+                        if (errOrd) return res.status(500).json({ status: 'error', message: errOrd.message });
+                        res.json({ status: 'success', message: 'Orden eliminada correctamente.' });
+                    });
+                });
+            });
+        });
+    });
+};
+
+const actualizarEstadoOrden = (req, res) => {
+    const { id } = req.params;
+    const { estado, ubicacion_fisica, abonar_adicional = 0 } = req.body;
+
+    if (!estado) {
+        return res.status(400).json({ status: 'error', message: 'El estado es obligatorio.' });
+    }
+
+    db.get(`SELECT * FROM ordenes WHERE id = ?`, [id], (err, orden) => {
+        if (err || !orden) return res.status(404).json({ status: 'error', message: 'Orden no encontrada.' });
+
+        const nuevoEstado = estado;
+        const nuevaUbicacion = (ubicacion_fisica !== undefined && ubicacion_fisica !== '') ? ubicacion_fisica : (orden.ubicacion_fisica || 'Estantería Principal');
+        let nuevoAbono = orden.abono + (parseFloat(abonar_adicional) || 0);
+        let nuevoSaldo = Math.max(0, orden.total - nuevoAbono);
+
+        const queryUpdate = `UPDATE ordenes SET estado = ?, ubicacion_fisica = ?, abono = ?, saldo = ? WHERE id = ?`;
+
+        db.run(queryUpdate, [nuevoEstado, nuevaUbicacion, nuevoAbono, nuevoSaldo, id], function(errU) {
+            if (errU) return res.status(500).json({ status: 'error', message: errU.message });
+
+            db.run(`INSERT INTO historial_estados (orden_id, estado_anterior, estado_nuevo) VALUES (?, ?, ?)`, 
+                [id, orden.estado, nuevoEstado]);
+
+            if (abonar_adicional > 0) {
+                db.get(`SELECT id FROM turnos_caja WHERE estado = 'ABIERTA' ORDER BY id DESC LIMIT 1`, [], (eC, turno) => {
+                    if (turno) {
+                        db.run(`INSERT INTO movimientos_caja (turno_id, orden_id, tipo, monto, concepto) VALUES (?, ?, 'INGRESO_PAGO', ?, ?)`,
+                            [turno.id, id, parseFloat(abonar_adicional), `Pago/Abono orden ${orden.codigo_orden}`]);
+                    }
+                });
+            }
+
+            res.json({ status: 'success', message: 'Orden actualizada correctamente.', nuevoEstado });
+        });
+    });
+};
+
+const obtenerMensajeWhatsapp = (req, res) => {
+    const { id } = req.params;
+
+    const queryOrden = `
+        SELECT o.*, c.nombre_completo as cliente_nombre, c.telefono as cliente_telefono 
+        FROM ordenes o 
+        JOIN clientes c ON o.cliente_id = c.id 
+        WHERE o.id = ?
+    `;
+
+    db.get(queryOrden, [id], (err, orden) => {
+        if (err || !orden) return res.status(404).json({ status: 'error', message: 'Orden o cliente no encontrado.' });
+
+        db.all(`SELECT d.*, s.nombre as servicio_nombre FROM detalle_orden d LEFT JOIN servicios s ON d.servicio_id = s.id WHERE d.orden_id = ?`, [id], (errDet, items) => {
+            if (errDet) items = [];
+
+            let tel = orden.cliente_telefono.replace(/\D/g, '');
+            if (tel.length === 10) tel = '57' + tel;
+
+            const estadoOrden = (orden.estado || '').trim().toLowerCase();
+            let detallePrendas = items.map(i => `• ${i.cantidad} ${i.servicio_nombre}${i.observacion_prenda ? ' ('+i.observacion_prenda+')' : ''}`).join('\n');
+            if (!detallePrendas) detallePrendas = '• Prendas generales de lavandería';
+
+            let textoMensaje = "";
+
+            if (estadoOrden.includes('listo')) {
+                textoMensaje = `Hola, ${orden.cliente_nombre}. Te informamos que tu pedido número ${orden.codigo_orden} ya está listo para entrega. Las prendas correspondientes a tu pedido son:\n${detallePrendas}\nPuedes pasar a recogerlas cuando gustes. ¡Gracias por confiar en nosotros!`;
+            } else {
+                textoMensaje = `🧺 *LAVANDERÍA LAVATEX*\n\n¡Hola ${orden.cliente_nombre}! Hemos recibido tu pedido *${orden.codigo_orden}*.\n\n` +
+                                `📋 *Detalle de prendas recibidas:*\n${detallePrendas}\n\n` +
+                                `💵 *Total a Pagar:* $${orden.total.toLocaleString('es-CO')} COP\n` +
+                                `💳 *Abono Inicial:* $${orden.abono.toLocaleString('es-CO')} COP\n` +
+                                `📌 *Saldo Pendiente:* $${orden.saldo.toLocaleString('es-CO')} COP\n\n` +
+                                `¡Gracias por confiar en nosotros!`;
+            }
+
+            const urlWa = `https://wa.me/${tel}?text=${encodeURIComponent(textoMensaje)}`;
+            res.json({ status: 'success', urlWhatsapp: urlWa, telefono: tel, mensaje: textoMensaje });
+        });
+    });
+};
+
+module.exports = {
+    obtenerServicios,
+    crearServicio,
+    actualizarServicio,
+    eliminarServicio,
+    obtenerOrdenes,
+    crearOrden,
+    eliminarOrden,
+    actualizarEstadoOrden,
+    obtenerMensajeWhatsapp
+};
