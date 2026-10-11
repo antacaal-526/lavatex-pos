@@ -9,6 +9,7 @@ router.delete('/servicios/:id', orderController.eliminarServicio);
 
 router.get('/', orderController.obtenerOrdenes);
 router.post('/', orderController.crearOrden);
+router.delete('/:id', orderController.eliminarOrden); // Ruta añadida para eliminar órdenes
 router.put('/:id/estado', orderController.actualizarEstadoOrden);
 router.get('/:id/whatsapp', orderController.obtenerMensajeWhatsapp);
 
