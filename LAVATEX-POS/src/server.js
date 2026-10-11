@@ -16,20 +16,21 @@ app.get('/', (req, res) => {
     res.sendFile(path.join(publicPath, 'index.html'));
 });
 
-// Base de datos SQLite persistente
-const dbPath = path.resolve(__dirname, '../lavatex_pos.db');
+// Base de datos SQLite persistente garantizada en la raíz del proyecto
+const dbPath = path.join(__dirname, '../lavatex_pos.db');
 const db = new sqlite3.Database(dbPath, (err) => {
     if (err) {
         console.error('Error al conectar con la base de datos SQLite:', err.message);
     } else {
-        console.log('Conectado a la base de datos SQLite de Lavatex.');
+        console.log('Conectado a la base de datos SQLite persistente de Lavatex en:', dbPath);
         inicializarBaseDatos();
     }
 });
 
-// Inicializar Tablas sin destruir información existente
+// Inicializar Tablas sin destruir información existente de clientes ni órdenes
 function inicializarBaseDatos() {
     db.serialize(() => {
+        // La tabla clientes se crea SOLO si no existe, protegiendo los registros actuales
         db.run(`CREATE TABLE IF NOT EXISTS clientes (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             nombre_completo TEXT NOT NULL,
@@ -343,7 +344,7 @@ app.get('/api/ordenes/:id/whatsapp', (req, res) => {
                 return desc;
             }).join('\n');
 
-            let mensaje = `🧺 LAVANDERÍA LAVATEX\n\n¡Hola ${orden.cliente_nombre}! Su recibo *${orden.codigo_orden}* está listo.\n\n📋 Detalle:\n${detallePrendas}\n\n💰 Total: $${Number(orden.total).toLocaleString('es-CO')} COP\n💵 Abono: $${Number(orden.abono).toLocaleString('es-CO')} COP\n🔴 Saldo: $${Number(orden.saldo).toLocaleString('es-CO')} COP\n\n¡Lo esperamos en Calle 19A # 10-81 Pasaje de Vargas!`;
+            let mensaje = `🧺 LAVASECO LAVATEX\n\n¡Hola ${orden.cliente_nombre}! Su recibo *${orden.codigo_orden}* está listo.\n\n📋 Detalle:\n${detallePrendas}\n\n💰 Total: $${Number(orden.total).toLocaleString('es-CO')} COP\n💵 Abono: $${Number(orden.abono).toLocaleString('es-CO')} COP\n🔴 Saldo: $${Number(orden.saldo).toLocaleString('es-CO')} COP\n\n¡Lo esperamos en Calle 19A # 10-81 Pasaje de Vargas!`;
 
             let urlWhatsapp = `https://api.whatsapp.com/send?phone=57${telefonoLimpio}&text=${encodeURIComponent(mensaje)}`;
             res.json({ status: 'success', urlWhatsapp });
