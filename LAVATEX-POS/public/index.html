@@ -72,15 +72,14 @@
         .resumen-row { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 15px; }
         .resumen-row.total { font-weight: bold; font-size: 18px; color: var(--primary); border-top: 1px solid var(--border); padding-top: 8px; }
 
-        #modalTicket, #modalCajaPago {
+        #modalTicket {
             display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0,0,0,0.5); justify-content: center; align-items: center; z-index: 1000;
         }
-        .ticket-box, .caja-pago-box {
-            background: white; padding: 25px; border-radius: 12px; width: 380px; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+        .ticket-box {
+            background: white; padding: 20px; border-radius: 8px; width: 340px; font-family: monospace; font-size: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.2); text-align: center;
         }
-        .ticket-box { text-align: center; width: 340px; font-family: monospace; font-size: 12px; }
         .ticket-box hr { border: none; border-top: 1px dashed #000; margin: 10px 0; }
 
         @media print {
@@ -97,6 +96,7 @@
         <div class="brand">🧺 LAVATEX POS</div>
         <a class="nav-item active" onclick="cambiarVista('clientes', this)">👥 Clientes</a>
         <a class="nav-item" onclick="cambiarVista('ordenes', this)">📦 Órdenes y Recepción</a>
+        <a class="nav-item" onclick="cambiarVista('cobro', this)">💳 Caja de Cobro</a>
         <a class="nav-item" onclick="cambiarVista('seguimiento', this)">🔍 Trazabilidad y Ubicación</a>
         <a class="nav-item" onclick="cambiarVista('servicios', this)">⚙️ Tarifas y Servicios</a>
         <a class="nav-item" onclick="cambiarVista('caja', this)">📊 Caja y Finanzas</a>
@@ -192,6 +192,43 @@
                         </table>
                     </div>
                 </div>
+            </div>
+        </div>
+
+        <!-- VISTA CAJA DE COBRO -->
+        <div id="vista-cobro" class="section-view">
+            <div class="card" style="max-width: 600px; margin: 0 auto;">
+                <h2 style="color:var(--primary); border-bottom:2px solid var(--border); padding-bottom:10px;">💳 Caja de Cobro y Entrega de Recibos</h2>
+                <div id="formAlertCobro" class="alert"></div>
+                
+                <div class="form-group" style="position:relative;">
+                    <label>Buscar Recibo (Número de recibo o nombre de cliente) *</label>
+                    <input type="text" id="inputBuscarCobroRecibo" class="form-control" placeholder="Ej. 0001 o nombre..." oninput="onInputBuscarCobroRecibo()" autocomplete="off" style="font-size:16px; font-weight:bold;">
+                    <input type="hidden" id="cobro_orden_id">
+                    <div id="dropdownCobroRecibos" class="dropdown-suggestions"></div>
+                </div>
+
+                <div class="form-group">
+                    <label>Cliente Titular:</label>
+                    <input type="text" id="cobro_cliente" class="form-control" readonly style="background:#f1f5f9; font-weight:bold;">
+                </div>
+
+                <div class="form-group">
+                    <label>Saldo Pendiente a Pagar ($ COP):</label>
+                    <input type="text" id="cobro_saldo_pendiente" class="form-control" readonly style="background:#fee2e2; color:#991b1b; font-weight:bold; font-size:18px;">
+                </div>
+
+                <div class="form-group">
+                    <label>Dinero Recibido del Cliente ($ COP) *</label>
+                    <input type="number" id="cobro_dinero_recibido" class="form-control" placeholder="Ej. 20000" oninput="calcularVueltasTabCobro()" style="font-size:18px; font-weight:bold;">
+                </div>
+
+                <div class="form-group">
+                    <label>Cambio / Vueltas ($ COP):</label>
+                    <input type="text" id="cobro_vueltas" class="form-control" readonly style="background:#dcfce7; color:#166534; font-weight:bold; font-size:18px;" value="$0">
+                </div>
+
+                <button class="btn" onclick="ejecutarCobroYEntregarTab()" style="background:#166534; padding:15px; font-size:16px; margin-top:10px;">✅ Cobrar, Abrir Cajón y Marcar Entregado</button>
             </div>
         </div>
 
@@ -404,37 +441,6 @@
         </div>
     </div>
 
-    <!-- MODAL CAJA / COBRO AL ENTREGAR -->
-    <div id="modalCajaPago">
-        <div class="caja-pago-box">
-            <h2 style="color:var(--primary); margin-bottom:15px; border-bottom:2px solid var(--border); padding-bottom:8px;">💵 Cobro de Saldo Pendiente</h2>
-            <input type="hidden" id="modal_orden_id">
-            <input type="hidden" id="modal_ubicacion">
-            
-            <div class="form-group">
-                <label>Recibo N°:</label>
-                <input type="text" id="modal_codigo_orden" class="form-control" readonly style="background:#f1f5f9; font-weight:bold;">
-            </div>
-            <div class="form-group">
-                <label>Saldo Pendiente a Pagar ($ COP):</label>
-                <input type="text" id="modal_saldo_pendiente" class="form-control" readonly style="background:#fee2e2; color:#991b1b; font-weight:bold; font-size:16px;">
-            </div>
-            <div class="form-group">
-                <label>Dinero Recibido del Cliente ($ COP) *</label>
-                <input type="number" id="modal_dinero_recibido" class="form-control" placeholder="Ej. 20000" oninput="calcularVueltasModal()" style="font-size:16px; font-weight:bold;">
-            </div>
-            <div class="form-group">
-                <label>Cambio / Vueltas ($ COP):</label>
-                <input type="text" id="modal_vueltas" class="form-control" readonly style="background:#dcfce7; color:#166534; font-weight:bold; font-size:16px;" value="$0">
-            </div>
-
-            <div style="display: flex; gap: 10px; margin-top: 20px;">
-                <button class="btn" onclick="confirmarPagoYEntregar()" style="background:#166534; flex:1;">✅ Cobrar, Abrir Cajón y Entregar</button>
-                <button class="btn" onclick="cerrarModalCaja()" style="background:#64748b; width: 100px;">Cancelar</button>
-            </div>
-        </div>
-    </div>
-
     <script>
         let clientesCache = [], serviciosCache = [], ordenesCache = [], itemsOrdenActual = [], insumosCache = [], serviciosAdminCache = [];
 
@@ -453,6 +459,9 @@
             } else if(vista === 'ordenes') {
                 document.getElementById('vista-ordenes').classList.add('active');
                 cargarDatosOrden();
+            } else if(vista === 'cobro') {
+                document.getElementById('vista-cobro').classList.add('active');
+                cargarOrdenesParaCobro();
             } else if(vista === 'seguimiento') {
                 document.getElementById('vista-seguimiento').classList.add('active');
                 cargarDatosTracking();
@@ -762,6 +771,124 @@
             }
         }
 
+        // --- LÓGICA DE LA NUEVA PESTAÑA DE COBRO ---
+        async function cargarOrdenesParaCobro() {
+            const res = await fetch('/api/ordenes');
+            const result = await res.json();
+            if(result.status === 'success') {
+                ordenesCache = result.data;
+            }
+        }
+
+        function onInputBuscarCobroRecibo() {
+            const query = document.getElementById('inputBuscarCobroRecibo').value.toLowerCase().trim();
+            const dropdown = document.getElementById('dropdownCobroRecibos');
+            if(!query) { dropdown.style.display = 'none'; return; }
+
+            const filtrados = ordenesCache.filter(o => 
+                (o.codigo_orden || '').toLowerCase().includes(query) || 
+                (o.cliente_nombre || '').toLowerCase().includes(query) ||
+                (o.cliente_cedula || '').toLowerCase().includes(query)
+            );
+
+            if(filtrados.length === 0) {
+                dropdown.innerHTML = `<div class="suggestion-item" style="color:var(--text-muted);">No se encontraron recibos</div>`;
+            } else {
+                dropdown.innerHTML = filtrados.map(o => `
+                    <div class="suggestion-item" onclick="seleccionarReciboCobro(${o.id}, '${o.codigo_orden}', '${o.cliente_nombre || 'General'}', ${o.saldo})">
+                        Recibo N° <strong>${o.codigo_orden}</strong> - ${o.cliente_nombre || 'General'} (Saldo: $${formatoMoneda(o.saldo)}) [Estado: ${o.estado}]
+                    </div>
+                `).join('');
+            }
+            dropdown.style.display = 'block';
+        }
+
+        function seleccionarReciboCobro(id, codigo, cliente, saldo) {
+            document.getElementById('cobro_orden_id').value = id;
+            document.getElementById('inputBuscarCobroRecibo').value = codigo;
+            document.getElementById('cobro_cliente').value = cliente;
+            document.getElementById('cobro_saldo_pendiente').value = `$${formatoMoneda(saldo)} COP`;
+            document.getElementById('cobro_dinero_recibido').value = saldo;
+            document.getElementById('dropdownCobroRecibos').style.display = 'none';
+            calcularVueltasTabCobro();
+            document.getElementById('cobro_dinero_recibido').focus();
+        }
+
+        function calcularVueltasTabCobro() {
+            const ordenId = document.getElementById('cobro_orden_id').value;
+            if(!ordenId) return;
+            const orden = ordenesCache.find(o => o.id == ordenId);
+            if(!orden) return;
+
+            let recibido = parseFloat(document.getElementById('cobro_dinero_recibido').value) || 0;
+            let vuelto = recibido - orden.saldo;
+            document.getElementById('cobro_vueltas').value = `$${formatoMoneda(Math.max(0, vuelto))}`;
+        }
+
+        function abrirCajonMonedero() {
+            try {
+                const comandoCajon = '\x1B\x70\x00\x19\xFA';
+                const iframePrint = document.createElement('iframe');
+                iframePrint.style.display = 'none';
+                iframePrint.src = 'data:text/html;charset=utf-8,' + encodeURI(comandoCajon);
+                document.body.appendChild(iframePrint);
+                setTimeout(() => document.body.removeChild(iframePrint), 1000);
+            } catch (e) {
+                console.log("Cajón monedero abierto.");
+            }
+        }
+
+        async function ejecutarCobroYEntregarTab() {
+            const ordenId = document.getElementById('cobro_orden_id').value;
+            const alertBox = document.getElementById('formAlertCobro');
+            
+            if(!ordenId) {
+                alertBox.className = 'alert alert-error';
+                alertBox.innerText = 'Por favor seleccione un recibo válido.';
+                alertBox.style.display = 'block';
+                return;
+            }
+
+            const orden = ordenesCache.find(o => o.id == ordenId);
+            let recibido = parseFloat(document.getElementById('cobro_dinero_recibido').value) || 0;
+
+            if(recibido < orden.saldo) {
+                alertBox.className = 'alert alert-error';
+                alertBox.innerText = 'El dinero recibido es menor al saldo pendiente.';
+                alertBox.style.display = 'block';
+                return;
+            }
+
+            // Actualizar a estado 'Entregado' y pagar el saldo completo
+            const res = await fetch(`/api/ordenes/${ordenId}/estado`, {
+                method: 'PUT',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ estado: 'Entregado', ubicacion_fisica: orden.ubicacion_fisica || 'Estantería Principal', abonar_adicional: orden.saldo })
+            });
+
+            const result = await res.json();
+            if(res.ok) {
+                abrirCajonMonedero();
+                let vuelto = recibido - orden.saldo;
+                alert(`¡Cobro exitoso!\nCambio / Vueltas: $${formatoMoneda(vuelto)} COP\n¡Cajón abierto y recibo ${orden.codigo_orden} marcado como Entregado!`);
+                
+                // Limpiar formulario
+                document.getElementById('cobro_orden_id').value = '';
+                document.getElementById('inputBuscarCobroRecibo').value = '';
+                document.getElementById('cobro_cliente').value = '';
+                document.getElementById('cobro_saldo_pendiente').value = '';
+                document.getElementById('cobro_dinero_recibido').value = '';
+                document.getElementById('cobro_vueltas').value = '$0';
+                alertBox.style.display = 'none';
+                cargarOrdenesParaCobro();
+            } else {
+                alertBox.className = 'alert alert-error';
+                alertBox.innerText = 'Error al procesar el cobro: ' + result.message;
+                alertBox.style.display = 'block';
+            }
+        }
+
+        // --- TRAZABILIDAD ---
         async function cargarDatosTracking() {
             const res = await fetch('/api/ordenes');
             const result = await res.json();
@@ -834,89 +961,17 @@
             renderizarTablaTracking(filtrados);
         }
 
-        // Función para enviar pulso físico ESC/POS al cajón monedero conectado por USB/Impresora térmica
-        function abrirCajonMonedero() {
-            try {
-                // Comando ESC/POS estándar para abrir cajón (ESC p 0 25 250)
-                const comandoCajon = '\x1B\x70\x00\x19\xFA';
-                console.log("Enviando pulso de apertura al cajón monedero...");
-                
-                // Si hay una impresora conectada mediante Web Print o ventana invisible de impresión
-                const iframePrint = document.createElement('iframe');
-                iframePrint.style.display = 'none';
-                iframePrint.src = 'data:text/html;charset=utf-8,' + encodeURI(comandoCajon);
-                document.body.appendChild(iframePrint);
-                setTimeout(() => document.body.removeChild(iframePrint), 1000);
-            } catch (e) {
-                console.log("Cajón monedero simulado o abierto correctamente.");
-            }
-        }
-
         async function actualizarTracking(ordenId) {
             const estado = document.getElementById(`estado_${ordenId}`).value;
             const ubicacion = document.getElementById(`ubicacion_${ordenId}`).value;
             const orden = ordenesCache.find(o => o.id === ordenId);
 
-            if(!orden) return;
-
-            // Si seleccionan 'Entregado' y aún tiene saldo pendiente, abrir el modal de caja
-            if(estado === 'Entregado' && orden.saldo > 0) {
-                document.getElementById('modal_orden_id').value = orden.id;
-                document.getElementById('modal_codigo_orden').value = orden.codigo_orden;
-                document.getElementById('modal_ubicacion').value = ubicacion;
-                document.getElementById('modal_saldo_pendiente').value = `$${formatoMoneda(orden.saldo)} COP`;
-                document.getElementById('modal_dinero_recibido').value = orden.saldo;
-                document.getElementById('modal_vueltas').value = `$0`;
-                document.getElementById('modalCajaPago').style.display = 'flex';
-                document.getElementById('modal_dinero_recibido').focus();
-                return;
+            let abonarAdicional = 0;
+            if(estado === 'Entregado' && orden && orden.saldo > 0) {
+                abonarAdicional = orden.saldo;
+                abrirCajonMonedero();
             }
 
-            // Si no tiene saldo pendiente o el estado es otro, actualizar directamente
-            guardarCambiosEstado(ordenId, estado, ubicacion, 0);
-        }
-
-        function calcularVueltasModal() {
-            const ordenId = document.getElementById('modal_orden_id').value;
-            const orden = ordenesCache.find(o => o.id == ordenId);
-            if(!orden) return;
-
-            let recibido = parseFloat(document.getElementById('modal_dinero_recibido').value) || 0;
-            let vuelto = recibido - orden.saldo;
-
-            document.getElementById('modal_vueltas').value = `$${formatoMoneda(Math.max(0, vuelto))}`;
-        }
-
-        function cerrarModalCaja() {
-            document.getElementById('modalCajaPago').style.display = 'none';
-            cargarDatosTracking(); // Restaurar selectores si cancelan
-        }
-
-        async function confirmarPagoYEntregar() {
-            const ordenId = document.getElementById('modal_orden_id').value;
-            const ubicacion = document.getElementById('modal_ubicacion').value;
-            const orden = ordenesCache.find(o => o.id == ordenId);
-            let recibido = parseFloat(document.getElementById('modal_dinero_recibido').value) || 0;
-
-            if(!orden) return;
-
-            if(recibido < orden.saldo) {
-                alert('El dinero recibido es menor al saldo pendiente.');
-                return;
-            }
-
-            // Guardar el pago total del saldo
-            await guardarCambiosEstado(ordenId, 'Entregado', ubicacion, orden.saldo);
-            
-            // Abrir el cajón monedero físico
-            abrirCajonMonedero();
-
-            document.getElementById('modalCajaPago').style.display = 'none';
-            let vuelto = recibido - orden.saldo;
-            alert(`¡Pago registrado con éxito!\nCambio / Vueltas a entregar: $${formatoMoneda(vuelto)} COP\n¡Cajón de dinero abierto!`);
-        }
-
-        async function guardarCambiosEstado(ordenId, estado, ubicacion, abonarAdicional) {
             const res = await fetch(`/api/ordenes/${ordenId}/estado`, {
                 method: 'PUT',
                 headers: {'Content-Type': 'application/json'},
