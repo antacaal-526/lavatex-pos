@@ -145,8 +145,9 @@
                             <select id="selectCliente" class="form-control" required><option value="">-- Seleccione cliente --</option></select>
                         </div>
                         <div class="form-group">
-                            <label>Seleccionar Servicio *</label>
-                            <select id="selectServicio" class="form-control" onchange="agregarItemOrden()"><option value="">-- Agregar servicio --</option></select>
+                            <label>Buscar y Agregar Servicio *</label>
+                            <input type="text" id="filtroBuscarServicio" class="form-control" placeholder="Escriba para buscar servicio o prenda..." onkeyup="filtrarServiciosOrden()" style="margin-bottom: 8px;">
+                            <select id="selectServicio" class="form-control" onchange="agregarItemOrden()"><option value="">-- Seleccione servicio de la lista --</option></select>
                         </div>
 
                         <div class="table-container" style="margin-bottom: 15px;">
@@ -504,7 +505,7 @@
             const rS = await resS.json();
             if(rS.status === 'success') {
                 serviciosCache = rS.data;
-                document.getElementById('selectServicio').innerHTML = `<option value="">-- Agregar servicio --</option>` + serviciosCache.map(s => `<option value="${s.id}">${s.nombre} - $${formatoMoneda(s.precio)} COP</option>`).join('');
+                actualizarSelectServicios(serviciosCache);
             }
             
             const maniana = new Date();
@@ -529,6 +530,22 @@
             }
         }
 
+        function actualizarSelectServicios(servicios) {
+            const select = document.getElementById('selectServicio');
+            select.innerHTML = `<option value="">-- Seleccione servicio de la lista --</option>` + servicios.map(s => `<option value="${s.id}">${s.nombre} - $${formatoMoneda(s.precio)} COP</option>`).join('');
+        }
+
+        function filtrarServiciosOrden() {
+            const filtro = document.getElementById('filtroBuscarServicio').value.toLowerCase().trim();
+            const filtrados = serviciosCache.filter(s => s.nombre.toLowerCase().includes(filtro) || (s.descripcion && s.descripcion.toLowerCase().includes(filtro)));
+            actualizarSelectServicios(filtrados);
+
+            if(filtro.length >= 2 && filtrados.length === 1) {
+                document.getElementById('selectServicio').value = filtrados[0].id;
+                agregarItemOrden();
+            }
+        }
+
         function agregarItemOrden() {
             const select = document.getElementById('selectServicio');
             const servicioId = select.value;
@@ -537,7 +554,10 @@
             if(!serv) return;
 
             let cantidad = prompt(`Cantidad o peso para "${serv.nombre}":`, "1");
-            if(cantidad === null || isNaN(cantidad) || Number(cantidad) <= 0) return;
+            if(cantidad === null || isNaN(cantidad) || Number(cantidad) <= 0) {
+                select.value = "";
+                return;
+            }
 
             let observacionPrenda = prompt(`Detalle o tipo de prenda (Ej. 2 Pantalones azules, Chaqueta de cuero, etc.):`, "");
 
@@ -548,7 +568,10 @@
                 precio_unitario: serv.precio,
                 observacion_prenda: observacionPrenda || ''
             });
+
             select.value = "";
+            document.getElementById('filtroBuscarServicio').value = "";
+            actualizarSelectServicios(serviciosCache);
             renderizarItemsOrden();
         }
 
