@@ -30,7 +30,6 @@ const db = new sqlite3.Database(dbPath, (err) => {
 // Inicializar Tablas sin destruir información existente de clientes ni órdenes
 function inicializarBaseDatos() {
     db.serialize(() => {
-        // La tabla clientes se crea SOLO si no existe, protegiendo los registros actuales
         db.run(`CREATE TABLE IF NOT EXISTS clientes (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             nombre_completo TEXT NOT NULL,
@@ -73,7 +72,7 @@ function inicializarBaseDatos() {
             total REAL NOT NULL,
             abono REAL DEFAULT 0,
             saldo REAL NOT NULL,
-            fecha_recepcion DATETIME DEFAULT CURRENT_TIMESTAMP,
+            fecha_recepcion DATETIME,
             fecha_entrega_estimada DATETIME,
             estado TEXT DEFAULT 'Recibido',
             ubicacion_fisica TEXT DEFAULT 'Estantería Principal',
@@ -227,14 +226,18 @@ app.post('/api/ordenes', (req, res) => {
     let saldo = Math.max(0, total - abonoNum);
     let obsGenerales = observaciones || '';
 
+    // Obtener la fecha y hora exacta actual de Colombia (Bogotá)
+    const fechaHoraColombia = new Date().toLocaleString('en-US', { timeZone: 'America/Bogota' });
+    const fechaRecepcionLocal = new Date(fechaHoraColombia).toISOString().slice(0, 19).replace('T', ' ');
+
     db.serialize(() => {
         db.get(`SELECT MAX(id) as max_id FROM ordenes`, [], (err, row) => {
             let nextId = (row && row.max_id) ? row.max_id + 1 : 1;
             let codigoOrden = String(nextId).padStart(4, '0');
 
-            const queryOrden = `INSERT INTO ordenes (codigo_orden, cliente_id, total, abono, saldo, fecha_entrega_estimada, estado, ubicacion_fisica, observaciones) VALUES (?, ?, ?, ?, ?, ?, 'Recibido', 'Estantería Principal', ?)`;
+            const queryOrden = `INSERT INTO ordenes (codigo_orden, cliente_id, total, abono, saldo, fecha_recepcion, fecha_entrega_estimada, estado, ubicacion_fisica, observaciones) VALUES (?, ?, ?, ?, ?, ?, ?, 'Recibido', 'Estantería Principal', ?)`;
             
-            db.run(queryOrden, [codigoOrden, cliente_id || null, total, abonoNum, saldo, fecha_entrega_estimada, obsGenerales], function(err) {
+            db.run(queryOrden, [codigoOrden, cliente_id || null, total, abonoNum, saldo, fechaRecepcionLocal, fecha_entrega_estimada, obsGenerales], function(err) {
                 if (err) {
                     return res.status(500).json({ status: 'error', message: err.message });
                 }
