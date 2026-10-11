@@ -50,7 +50,30 @@ const crearCliente = (req, res) => {
     });
 };
 
+// Eliminar un cliente de forma segura
+const eliminarCliente = (req, res) => {
+    const { id } = req.params;
+
+    // Verificar si el cliente tiene órdenes asociadas
+    db.get(`SELECT COUNT(*) as count FROM ordenes WHERE cliente_id = ?`, [id], (err, row) => {
+        if (err) return res.status(500).json({ status: 'error', message: err.message });
+
+        if (row.count > 0) {
+            return res.status(400).json({ 
+                status: 'error', 
+                message: 'No se puede eliminar el cliente porque tiene órdenes registradas en el sistema.' 
+            });
+        }
+
+        db.run(`DELETE FROM clientes WHERE id = ?`, [id], function(errDel) {
+            if (errDel) return res.status(500).json({ status: 'error', message: errDel.message });
+            res.json({ status: 'success', message: 'Cliente eliminado correctamente.' });
+        });
+    });
+};
+
 module.exports = {
     obtenerClientes,
-    crearCliente
+    crearCliente,
+    eliminarCliente
 };

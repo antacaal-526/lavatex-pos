@@ -123,7 +123,7 @@
                     <div class="form-group"><input type="text" id="searchInput" class="form-control" placeholder="Buscar por nombre, teléfono o cédula..." onkeyup="filtrarClientes()"></div>
                     <div class="table-container">
                         <table>
-                            <thead><tr><th>Nombre</th><th>Cédula</th><th>Teléfono</th><th>Dirección</th></tr></thead>
+                            <thead><tr><th>Nombre</th><th>Cédula</th><th>Teléfono</th><th>Acción</th></tr></thead>
                             <tbody id="clientsTableBody"><tr><td colspan="4" style="text-align: center;">Cargando...</td></tr></tbody>
                         </table>
                     </div>
@@ -139,8 +139,8 @@
                     <div id="formAlertOrden" class="alert"></div>
                     <form id="orderForm" onsubmit="crearOrden(event)">
                         <div class="form-group">
-                            <label>Buscar / Seleccionar Cliente (por Cédula o Nombre) *</label>
-                            <input type="text" id="filtroBuscarCliente" class="form-control" placeholder="Escriba cédula o nombre para filtrar..." onkeyup="filtrarClientesOrden()" style="margin-bottom: 8px;">
+                            <label>Buscar por Cédula (Autocompleta Cliente) o Seleccionar *</label>
+                            <input type="text" id="filtroBuscarCliente" class="form-control" placeholder="Escriba número de cédula exacto o nombre..." onkeyup="filtrarClientesOrden()" style="margin-bottom: 8px;">
                             <select id="selectCliente" class="form-control" required><option value="">-- Seleccione cliente --</option></select>
                         </div>
                         <div class="form-group">
@@ -206,7 +206,7 @@
             </div>
         </div>
 
-        <!-- VISTA SERVICIOS Y TARIFAS (ADMINISTRACIÓN COMPLETA) -->
+        <!-- VISTA SERVICIOS Y TARIFAS -->
         <div id="vista-servicios" class="section-view">
             <div class="grid-container">
                 <div class="card">
@@ -441,7 +441,28 @@
         function renderizarTablaClientes(clientes) {
             const tbody = document.getElementById('clientsTableBody');
             if (clientes.length === 0) { tbody.innerHTML = `<tr><td colspan="4" style="text-align: center;">No hay clientes.</td></tr>`; return; }
-            tbody.innerHTML = clientes.map(c => `<tr><td><strong>${c.nombre_completo}</strong></td><td>${c.numero_identificacion || 'N/A'}</td><td>${c.telefono}</td><td>${c.direccion || 'N/A'}</td></tr>`).join('');
+            tbody.innerHTML = clientes.map(c => `
+                <tr>
+                    <td><strong>${c.nombre_completo}</strong></td>
+                    <td>${c.numero_identificacion || 'N/A'}</td>
+                    <td>${c.telefono}</td>
+                    <td>
+                        <button onclick="eliminarCliente(${c.id})" class="btn-danger">Eliminar</button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        async function eliminarCliente(id) {
+            if(!confirm('¿Está seguro de eliminar este cliente? Esta acción no se puede deshacer.')) return;
+            const res = await fetch(`/api/clientes/${id}`, { method: 'DELETE' });
+            const result = await res.json();
+            if(res.ok) {
+                alert('Cliente eliminado con éxito.');
+                cargarClientes();
+            } else {
+                alert('No se pudo eliminar: ' + result.message);
+            }
         }
 
         async function registrarCliente(e) {
@@ -482,7 +503,6 @@
                 document.getElementById('selectServicio').innerHTML = `<option value="">-- Agregar servicio --</option>` + serviciosCache.map(s => `<option value="${s.id}">${s.nombre} - $${formatoMoneda(s.precio)} COP</option>`).join('');
             }
             
-            // Fijar fecha por defecto a 24 horas después en el calendario
             const maniana = new Date();
             maniana.setHours(maniana.getHours() + 24);
             document.getElementById('fechaEntregaOrden').value = maniana.toISOString().slice(0, 16);
@@ -491,13 +511,19 @@
         }
 
         function actualizarSelectClientes(clientes) {
-            document.getElementById('selectCliente').innerHTML = `<option value="">-- Seleccione cliente --</option>` + clientes.map(c => `<option value="${c.id}">${c.nombre_completo} - Cédula: ${c.numero_identificacion || 'S/N'} (${c.telefono})</option>`).join('');
+            const select = document.getElementById('selectCliente');
+            select.innerHTML = `<option value="">-- Seleccione cliente --</option>` + clientes.map(c => `<option value="${c.id}">${c.nombre_completo} - Cédula: ${c.numero_identificacion || 'S/N'} (${c.telefono})</option>`).join('');
         }
 
         function filtrarClientesOrden() {
-            const filtro = document.getElementById('filtroBuscarCliente').value.toLowerCase();
+            const filtro = document.getElementById('filtroBuscarCliente').value.toLowerCase().trim();
             const filtrados = clientesCache.filter(c => (c.numero_identificacion && c.numero_identificacion.toLowerCase().includes(filtro)) || c.nombre_completo.toLowerCase().includes(filtro) || c.telefono.includes(filtro));
             actualizarSelectClientes(filtrados);
+
+            // Autoseleccionar si coincide exactamente con la cédula o nombre ingresado
+            if(filtro.length >= 3 && filtrados.length === 1) {
+                document.getElementById('selectCliente').value = filtrados[0].id;
+            }
         }
 
         function agregarItemOrden() {
@@ -617,9 +643,6 @@
                     <td>${o.cliente_nombre || 'General'}</td>
                     <td>
                         <select id="estado_${o.id}" class="form-control" style="padding:4px;">
-                            <option value="Recibido" ${o.estado === 'Recibido' ? 'selected' : ''}>Recibido</option>
-                            <option value="En Lavado" ${o.estado === 'En Lavado' ? 'selected' : ''}>En Lavado</option>
-                            <option value="En Planchado" ${o.estado === 'En Planchado' ? 'selected' : ''}>En Planchado</option>
                             <option value="Listo para Entrega" ${o.estado === 'Listo para Entrega' ? 'selected' : ''}>Listo para Entrega</option>
                             <option value="Entregado" ${o.estado === 'Entregado' ? 'selected' : ''}>Entregado</option>
                         </select>
