@@ -88,7 +88,6 @@ const crearOrden = (req, res) => {
 
     const fechaStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
     
-    // Consultar el consecutivo diario del día actual
     db.get(`SELECT COUNT(*) as total FROM ordenes WHERE codigo_orden LIKE ?`, [`ORD-${fechaStr}-%`], (errCount, rowCount) => {
         const consecutivo = (rowCount ? rowCount.total : 0) + 1;
         const codigo_orden = `ORD-${fechaStr}-${consecutivo}`;
@@ -136,7 +135,6 @@ const crearOrden = (req, res) => {
 
                     db.run('COMMIT');
 
-                    // Devolver todos los datos necesarios para que el ticket no salga en blanco
                     db.get(`SELECT o.*, c.nombre_completo as cliente_nombre, c.telefono as cliente_telefono, c.numero_identificacion as cliente_cedula, c.direccion as cliente_direccion FROM ordenes o LEFT JOIN clientes c ON o.cliente_id = c.id WHERE o.id = ?`, [ordenId], (errGet, ordenCompleta) => {
                         db.all(`SELECT d.*, s.nombre as servicio_nombre FROM detalle_orden d LEFT JOIN servicios s ON d.servicio_id = s.id WHERE d.orden_id = ?`, [ordenId], (errDet, itemsCompletos) => {
                             res.status(201).json({ 
@@ -213,42 +211,46 @@ const actualizarEstadoOrden = (req, res) => {
     });
 };
 
-// Generar enlace para notificación de WhatsApp
+// Generar enlace detallado para notificación de WhatsApp con descripción de prendas
 const obtenerMensajeWhatsapp = (req, res) => {
     const { id } = req.params;
 
-    const query = `
+    const queryOrden = `
         SELECT o.*, c.nombre_completo as cliente_nombre, c.telefono as cliente_telefono 
         FROM ordenes o 
         JOIN clientes c ON o.cliente_id = c.id 
         WHERE o.id = ?
     `;
 
-    db.get(query, [id], (err, orden) => {
+    db.get(queryOrden, [id], (err, orden) => {
         if (err || !orden) return res.status(404).json({ status: 'error', message: 'Orden o cliente no encontrado.' });
 
-        let tel = orden.cliente_telefono.replace(/\D/g, '');
-        if (tel.length === 10) tel = '57' + tel;
+        db.all(`SELECT d.*, s.nombre as servicio_nombre FROM detalle_orden d LEFT JOIN servicios s ON d.servicio_id = s.id WHERE d.orden_id = ?`, [id], (errDet, items) => {
+            if (errDet) items = [];
 
-        const estadoNormalizado = (orden.estado || '').trim().toLowerCase();
-        let textoMensaje = "";
+            let tel = orden.cliente_telefono.replace(/\D/g, '');
+            if (tel.length === 10) tel = '57' + tel;
 
-        if (estadoNormalizado === 'listo para entrega' || estadoNormalizado === 'listo') {
-            textoMensaje = `🧺 *LAVANDERÍA LAVATEX*\n\n¡Hola ${orden.cliente_nombre}! Su pedido con la orden *${orden.codigo_orden}* ya está *LISTO PARA ENTREGA* en nuestro local.\n\n` +
-                            `💰 *Total:* $${orden.total.toLocaleString()} COP\n` +
-                            `💳 *Saldo Pendiente:* $${orden.saldo.toLocaleString()} COP\n` +
-                            `📍 *Ubicación:* ${orden.ubicacion_fisica || 'Estantería Principal'}\n\n` +
-                            `¡Le esperamos!`;
-        } else {
-            textoMensaje = `🧺 *LAVANDERÍA LAVATEX*\n\nHola ${orden.cliente_nombre}, le informamos sobre su pedido *${orden.codigo_orden}*.\n\n` +
-                            `📌 *Estado Actual:* ${orden.estado}\n` +
-                            `💵 *Total:* $${orden.total.toLocaleString()} COP\n` +
-                            `💳 *Saldo Pendiente:* $${orden.saldo.toLocaleString()} COP\n\n` +
-                            `¡Gracias por confiar en nosotros!`;
-        }
+            const estadoNormalizado = (orden.estado || '').trim().toLowerCase();
+            let detallePrendas = items.map(i => `• ${i.cantidad}x ${i.servicio_nombre}`).join('\n');
+            if (!detallePrendas) detallePrendas = '• Servicios generales de lavandería';
 
-        const urlWa = `https://wa.me/${tel}?text=${encodeURIComponent(textoMensaje)}`;
-        res.json({ status: 'success', urlWhatsapp: urlWa, telefono: tel, mensaje: textoMensaje });
+            let textoMensaje = "";
+
+            if (estadoNormalizado === 'listo para entrega' || estadoNormalizado === 'listo') {
+                textoMensaje = `Hola, ${orden.cliente_nombre}. Te informamos que tu pedido número ${orden.codigo_orden} ya está listo para entrega. Las prendas correspondientes a tu pedido son:\n${detallePrendas}\nPuedes acercarte para recogerlo. ¡Gracias por confiar en nosotros!`;
+            } else {
+                textoMensaje = `🧺 *LAVANDERÍA LAVATEX*\n\n¡Hola ${orden.cliente_nombre}! Hemos recibido tu pedido *${orden.codigo_orden*}.\n\n` +
+                                `📋 *Detalle de prendas recibidas:*\n${detallePrendas}\n\n` +
+                                `💵 *Total a Pagar:* $${orden.total.toLocaleString('es-CO')} COP\n` +
+                                `💳 *Abono Inicial:* $${orden.abono.toLocaleString('es-CO')} COP\n` +
+                                `📌 *Saldo Pendiente:* $${orden.saldo.toLocaleString('es-CO')} COP\n\n` +
+                                `¡Gracias por confiar en nosotros!`;
+            }
+
+            const urlWa = `https://wa.me/${tel}?text=${encodeURIComponent(textoMensaje)}`;
+            res.json({ status: 'success', urlWhatsapp: urlWa, telefono: tel, mensaje: textoMensaje });
+        });
     });
 };
 
@@ -260,7 +262,6 @@ module.exports = {
     obtenerOrdenes,
     crearOrden,
     eliminarOrden,
-    atualizarEstadoOrden: actualizarEstadoOrden,
     actualizarEstadoOrden,
     obtenerMensajeWhatsapp
 };
