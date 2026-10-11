@@ -44,6 +44,7 @@
         
         .btn { background-color: var(--primary); color: white; border: none; padding: 12px 20px; font-size: 14px; border-radius: 6px; cursor: pointer; font-weight: 600; width: 100%; transition: background 0.2s; }
         .btn:hover { background-color: var(--primary-dark); }
+        .btn:disabled { background-color: #94a3b8; cursor: not-allowed; }
         .btn-wa { background-color: #25d366; color: white; border: none; padding: 6px 10px; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 12px; }
         .btn-wa:hover { background-color: #1ebc57; }
         .btn-danger { background-color: #dc2626; color: white; border: none; padding: 6px 10px; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 12px; }
@@ -574,7 +575,12 @@
             const alertBox = document.getElementById('formAlertOrden');
             const btnCrear = document.getElementById('btnCrearOrden');
 
-            if(itemsOrdenActual.length === 0) { alertBox.className = 'alert alert-error'; alertBox.innerText = 'Debe agregar al menos un servicio.'; alertBox.style.display = 'block'; return; }
+            if(itemsOrdenActual.length === 0) { 
+                alertBox.className = 'alert alert-error'; 
+                alertBox.innerText = 'Debe agregar al menos un servicio.'; 
+                alertBox.style.display = 'block'; 
+                return; 
+            }
 
             btnCrear.disabled = true;
             btnCrear.innerText = 'Generando orden...';
@@ -589,21 +595,33 @@
             };
 
             try {
-                const res = await fetch('/api/ordenes', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(nuevaOrden) });
+                const res = await fetch('/api/ordenes', { 
+                    method: 'POST', 
+                    headers: {'Content-Type': 'application/json'}, 
+                    body: JSON.stringify(nuevaOrden) 
+                });
                 const result = await res.json();
 
                 if(res.ok) {
-                    alertBox.className = 'alert alert-success'; alertBox.innerText = `¡Orden ${result.codigo_orden} creada!`; alertBox.style.display = 'block';
+                    alertBox.className = 'alert alert-success'; 
+                    alertBox.innerText = `¡Orden ${result.codigo_orden} creada!`; 
+                    alertBox.style.display = 'block';
+                    
                     itemsOrdenActual = []; 
                     document.getElementById('orderForm').reset(); 
                     renderizarItemsOrden(); 
                     cargarTablaOrdenesRecientes();
+                    
                     verTicket(result.ordenId);
                 } else { 
-                    alertBox.className = 'alert alert-error'; alertBox.innerText = result.message; alertBox.style.display = 'block'; 
+                    alertBox.className = 'alert alert-error'; 
+                    alertBox.innerText = result.message || 'Error al generar la orden.'; 
+                    alertBox.style.display = 'block'; 
                 }
             } catch (error) {
-                alertBox.className = 'alert alert-error'; alertBox.innerText = 'Error de conexión con el servidor.'; alertBox.style.display = 'block';
+                alertBox.className = 'alert alert-error'; 
+                alertBox.innerText = 'Error de conexión con el servidor.'; 
+                alertBox.style.display = 'block';
             } finally {
                 btnCrear.disabled = false;
                 btnCrear.innerText = 'Generar Orden y Ver Ticket';
