@@ -204,10 +204,10 @@ app.delete('/api/ordenes/servicios/:id', (req, res) => {
     });
 });
 
-// API Órdenes (Consecutivo desde 0001)
+// API Órdenes (Incluyendo cédula del cliente para búsqueda)
 app.get('/api/ordenes', (req, res) => {
     const query = `
-        SELECT o.*, c.nombre_completo as cliente_nombre, c.telefono as cliente_telefono 
+        SELECT o.*, c.nombre_completo as cliente_nombre, c.telefono as cliente_telefono, c.numero_identificacion as cliente_cedula 
         FROM ordenes o 
         LEFT JOIN clientes c ON o.cliente_id = c.id 
         ORDER BY o.id DESC
@@ -254,7 +254,7 @@ app.post('/api/ordenes', (req, res) => {
                     db.get(`SELECT id FROM caja_turnos WHERE estado = 'ABIERTA' ORDER BY id DESC LIMIT 1`, [], (err, turno) => {
                         if (turno) {
                             db.run(`INSERT INTO caja_movimientos (turno_id, tipo, monto, concepto) VALUES (?, 'ABONO', ?, ?)`, 
-                                [turno.id, abonoNum, `Abono inicial orden ${codigoOrden}`]);
+                                [turno.id, abonoNum, `Abono inicial recibo ${codigoOrden}`]);
                         }
                     });
                 }
@@ -292,7 +292,7 @@ app.put('/api/ordenes/:id/estado', (req, res) => {
                         db.get(`SELECT id FROM caja_turnos WHERE estado = 'ABIERTA' ORDER BY id DESC LIMIT 1`, [], (err, turno) => {
                             if (turno) {
                                 db.run(`INSERT INTO caja_movimientos (turno_id, tipo, monto, concepto) VALUES (?, 'ABONO', ?, ?)`, 
-                                    [turno.id, abonar_adicional, `Pago saldo orden ${orden.codigo_orden}`]);
+                                    [turno.id, abonar_adicional, `Pago saldo recibo ${orden.codigo_orden}`]);
                             }
                         });
                     }
