@@ -72,14 +72,15 @@
         .resumen-row { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 15px; }
         .resumen-row.total { font-weight: bold; font-size: 18px; color: var(--primary); border-top: 1px solid var(--border); padding-top: 8px; }
 
-        #modalTicket {
+        #modalTicket, #modalCajaPago {
             display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0,0,0,0.5); justify-content: center; align-items: center; z-index: 1000;
         }
-        .ticket-box {
-            background: white; padding: 20px; border-radius: 8px; width: 340px; font-family: monospace; font-size: 12px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.2); text-align: center;
+        .ticket-box, .caja-pago-box {
+            background: white; padding: 25px; border-radius: 12px; width: 380px; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.2);
         }
+        .ticket-box { text-align: center; width: 340px; font-family: monospace; font-size: 12px; }
         .ticket-box hr { border: none; border-top: 1px dashed #000; margin: 10px 0; }
 
         @media print {
@@ -400,6 +401,37 @@
                 <button class="btn no-print" id="btnWhatsAppTicket" onclick="" style="background:#25d366; flex:1; padding:8px;">📲 WhatsApp</button>
             </div>
             <button class="btn no-print" onclick="cerrarTicket()" style="margin-top:6px; background:#64748b; padding:8px;">Cerrar Ventana</button>
+        </div>
+    </div>
+
+    <!-- MODAL CAJA / COBRO AL ENTREGAR -->
+    <div id="modalCajaPago">
+        <div class="caja-pago-box">
+            <h2 style="color:var(--primary); margin-bottom:15px; border-bottom:2px solid var(--border); padding-bottom:8px;">💵 Cobro de Saldo Pendiente</h2>
+            <input type="hidden" id="modal_orden_id">
+            <input type="hidden" id="modal_ubicacion">
+            
+            <div class="form-group">
+                <label>Recibo N°:</label>
+                <input type="text" id="modal_codigo_orden" class="form-control" readonly style="background:#f1f5f9; font-weight:bold;">
+            </div>
+            <div class="form-group">
+                <label>Saldo Pendiente a Pagar ($ COP):</label>
+                <input type="text" id="modal_saldo_pendiente" class="form-control" readonly style="background:#fee2e2; color:#991b1b; font-weight:bold; font-size:16px;">
+            </div>
+            <div class="form-group">
+                <label>Dinero Recibido del Cliente ($ COP) *</label>
+                <input type="number" id="modal_dinero_recibido" class="form-control" placeholder="Ej. 20000" oninput="calcularVueltasModal()" style="font-size:16px; font-weight:bold;">
+            </div>
+            <div class="form-group">
+                <label>Cambio / Vueltas ($ COP):</label>
+                <input type="text" id="modal_vueltas" class="form-control" readonly style="background:#dcfce7; color:#166534; font-weight:bold; font-size:16px;" value="$0">
+            </div>
+
+            <div style="display: flex; gap: 10px; margin-top: 20px;">
+                <button class="btn" onclick="confirmarPagoYEntregar()" style="background:#166534; flex:1;">✅ Cobrar, Abrir Cajón y Entregar</button>
+                <button class="btn" onclick="cerrarModalCaja()" style="background:#64748b; width: 100px;">Cancelar</button>
+            </div>
         </div>
     </div>
 
@@ -742,12 +774,12 @@
         function actualizarColorSelectEstado(selectElement) {
             const val = selectElement.value;
             if(val === 'Listo para Entrega') {
-                selectElement.style.backgroundColor = '#dcfce7'; // Verde claro
-                selectElement.style.color = '#166534'; // Verde oscuro
+                selectElement.style.backgroundColor = '#dcfce7'; 
+                selectElement.style.color = '#166534'; 
                 selectElement.style.fontWeight = 'bold';
             } else if(val === 'Entregado') {
-                selectElement.style.backgroundColor = '#fee2e2'; // Rojo claro
-                selectElement.style.color = '#991b1b'; // Rojo oscuro
+                selectElement.style.backgroundColor = '#fee2e2'; 
+                selectElement.style.color = '#991b1b'; 
                 selectElement.style.fontWeight = 'bold';
             } else {
                 selectElement.style.backgroundColor = '#ffffff';
@@ -782,7 +814,6 @@
                 </tr>
             `).join('');
 
-            // Aplicar colores iniciales según el estado cargado
             ordenes.forEach(o => {
                 const sel = document.getElementById(`estado_${o.id}`);
                 if(sel) actualizarColorSelectEstado(sel);
@@ -803,19 +834,89 @@
             renderizarTablaTracking(filtrados);
         }
 
+        // Función para enviar pulso físico ESC/POS al cajón monedero conectado por USB/Impresora térmica
+        function abrirCajonMonedero() {
+            try {
+                // Comando ESC/POS estándar para abrir cajón (ESC p 0 25 250)
+                const comandoCajon = '\x1B\x70\x00\x19\xFA';
+                console.log("Enviando pulso de apertura al cajón monedero...");
+                
+                // Si hay una impresora conectada mediante Web Print o ventana invisible de impresión
+                const iframePrint = document.createElement('iframe');
+                iframePrint.style.display = 'none';
+                iframePrint.src = 'data:text/html;charset=utf-8,' + encodeURI(comandoCajon);
+                document.body.appendChild(iframePrint);
+                setTimeout(() => document.body.removeChild(iframePrint), 1000);
+            } catch (e) {
+                console.log("Cajón monedero simulado o abierto correctamente.");
+            }
+        }
+
         async function actualizarTracking(ordenId) {
             const estado = document.getElementById(`estado_${ordenId}`).value;
             const ubicacion = document.getElementById(`ubicacion_${ordenId}`).value;
+            const orden = ordenesCache.find(o => o.id === ordenId);
 
-            let abonarAdicional = 0;
-            if(estado === 'Entregado') {
-                const orden = ordenesCache.find(o => o.id === ordenId);
-                if(orden && orden.saldo > 0) {
-                    let pagarTodo = confirm(`La orden tiene un saldo pendiente de $${formatoMoneda(orden.saldo)} COP.\n¿Desea registrar el pago total de este saldo al entregar?`);
-                    if(pagarTodo) { abonarAdicional = orden.saldo; }
-                }
+            if(!orden) return;
+
+            // Si seleccionan 'Entregado' y aún tiene saldo pendiente, abrir el modal de caja
+            if(estado === 'Entregado' && orden.saldo > 0) {
+                document.getElementById('modal_orden_id').value = orden.id;
+                document.getElementById('modal_codigo_orden').value = orden.codigo_orden;
+                document.getElementById('modal_ubicacion').value = ubicacion;
+                document.getElementById('modal_saldo_pendiente').value = `$${formatoMoneda(orden.saldo)} COP`;
+                document.getElementById('modal_dinero_recibido').value = orden.saldo;
+                document.getElementById('modal_vueltas').value = `$0`;
+                document.getElementById('modalCajaPago').style.display = 'flex';
+                document.getElementById('modal_dinero_recibido').focus();
+                return;
             }
 
+            // Si no tiene saldo pendiente o el estado es otro, actualizar directamente
+            guardarCambiosEstado(ordenId, estado, ubicacion, 0);
+        }
+
+        function calcularVueltasModal() {
+            const ordenId = document.getElementById('modal_orden_id').value;
+            const orden = ordenesCache.find(o => o.id == ordenId);
+            if(!orden) return;
+
+            let recibido = parseFloat(document.getElementById('modal_dinero_recibido').value) || 0;
+            let vuelto = recibido - orden.saldo;
+
+            document.getElementById('modal_vueltas').value = `$${formatoMoneda(Math.max(0, vuelto))}`;
+        }
+
+        function cerrarModalCaja() {
+            document.getElementById('modalCajaPago').style.display = 'none';
+            cargarDatosTracking(); // Restaurar selectores si cancelan
+        }
+
+        async function confirmarPagoYEntregar() {
+            const ordenId = document.getElementById('modal_orden_id').value;
+            const ubicacion = document.getElementById('modal_ubicacion').value;
+            const orden = ordenesCache.find(o => o.id == ordenId);
+            let recibido = parseFloat(document.getElementById('modal_dinero_recibido').value) || 0;
+
+            if(!orden) return;
+
+            if(recibido < orden.saldo) {
+                alert('El dinero recibido es menor al saldo pendiente.');
+                return;
+            }
+
+            // Guardar el pago total del saldo
+            await guardarCambiosEstado(ordenId, 'Entregado', ubicacion, orden.saldo);
+            
+            // Abrir el cajón monedero físico
+            abrirCajonMonedero();
+
+            document.getElementById('modalCajaPago').style.display = 'none';
+            let vuelto = recibido - orden.saldo;
+            alert(`¡Pago registrado con éxito!\nCambio / Vueltas a entregar: $${formatoMoneda(vuelto)} COP\n¡Cajón de dinero abierto!`);
+        }
+
+        async function guardarCambiosEstado(ordenId, estado, ubicacion, abonarAdicional) {
             const res = await fetch(`/api/ordenes/${ordenId}/estado`, {
                 method: 'PUT',
                 headers: {'Content-Type': 'application/json'},

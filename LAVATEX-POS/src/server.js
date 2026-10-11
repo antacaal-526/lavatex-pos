@@ -204,7 +204,7 @@ app.delete('/api/ordenes/servicios/:id', (req, res) => {
     });
 });
 
-// API Órdenes (Incluyendo cédula del cliente para búsqueda)
+// API Órdenes
 app.get('/api/ordenes', (req, res) => {
     const query = `
         SELECT o.*, c.nombre_completo as cliente_nombre, c.telefono as cliente_telefono, c.numero_identificacion as cliente_cedula 
