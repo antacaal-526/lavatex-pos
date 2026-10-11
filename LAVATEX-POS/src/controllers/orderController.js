@@ -1,6 +1,5 @@
 const db = require('../config/database');
 
-// Obtener catálogo de servicios (incluyendo inactivos para administración)
 const obtenerServicios = (req, res) => {
     const admin = req.query.admin === 'true';
     const query = admin ? `SELECT * FROM servicios ORDER BY nombre ASC` : `SELECT * FROM servicios WHERE activo = 1 ORDER BY nombre ASC`;
@@ -11,7 +10,6 @@ const obtenerServicios = (req, res) => {
     });
 };
 
-// Crear un nuevo servicio
 const crearServicio = (req, res) => {
     const { nombre, descripcion, unidad_cobro, precio, tiempo_estimado_horas } = req.body;
     if (!nombre || precio === undefined || !unidad_cobro) {
@@ -24,7 +22,6 @@ const crearServicio = (req, res) => {
     });
 };
 
-// Actualizar servicio existente
 const actualizarServicio = (req, res) => {
     const { id } = req.params;
     const { nombre, descripcion, unidad_cobro, precio, tiempo_estimado_horas, activo } = req.body;
@@ -40,7 +37,6 @@ const actualizarServicio = (req, res) => {
     });
 };
 
-// Eliminar o desactivar servicio de forma segura
 const eliminarServicio = (req, res) => {
     const { id } = req.params;
 
@@ -50,10 +46,7 @@ const eliminarServicio = (req, res) => {
         if (row.count > 0) {
             db.run(`UPDATE servicios SET activo = 0 WHERE id = ?`, [id], (errUp) => {
                 if (errUp) return res.status(500).json({ status: 'error', message: errUp.message });
-                res.json({ 
-                    status: 'success', 
-                    message: 'El servicio tiene pedidos históricos asociados. Ha sido DESACTIVADO exitosamente.' 
-                });
+                res.json({ status: 'success', message: 'El servicio tiene pedidos históricos asociados. Ha sido DESACTIVADO exitosamente.' });
             });
         } else {
             db.run(`DELETE FROM servicios WHERE id = ?`, [id], (errDel) => {
@@ -64,7 +57,6 @@ const eliminarServicio = (req, res) => {
     });
 };
 
-// Obtener listado de órdenes con datos de cliente
 const obtenerOrdenes = (req, res) => {
     const query = `
         SELECT o.*, c.nombre_completo as cliente_nombre, c.telefono as cliente_telefono, c.numero_identificacion as cliente_cedula 
@@ -78,7 +70,6 @@ const obtenerOrdenes = (req, res) => {
     });
 };
 
-// Crear nueva orden con código único seguro basado en timestamp y milisegundos
 const crearOrden = (req, res) => {
     const { cliente_id, items, descuento = 0, abono = 0, observaciones = '', fecha_entrega_estimada } = req.body;
 
@@ -101,28 +92,20 @@ const crearOrden = (req, res) => {
     let fechaEntrega = fecha_entrega_estimada ? new Date(fecha_entrega_estimada) : new Date();
     if (!fecha_entrega_estimada) fechaEntrega.setHours(fechaEntrega.getHours() + 24);
 
-    db.serialize(() => {
-        db.run('BEGIN TRANSACTION');
+    const queryOrden = `INSERT INTO ordenes (codigo_orden, cliente_id, subtotal, descuento, total, abono, saldo, fecha_entrega_estimada, observaciones, estado) 
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Recibido')`;
+    
+    db.run(queryOrden, [codigo_orden, cliente_id, subtotal, descuento, total, montoAbono, saldo, fechaEntrega.toISOString(), observaciones], function(err) {
+        if (err) {
+            return res.status(500).json({ status: 'error', message: err.message });
+        }
 
-        const queryOrden = `INSERT INTO ordenes (codigo_orden, cliente_id, subtotal, descuento, total, abono, saldo, fecha_entrega_estimada, observaciones, estado) 
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Recibido')`;
-        
-        db.run(queryOrden, [codigo_orden, cliente_id, subtotal, descuento, total, montoAbono, saldo, fechaEntrega.toISOString(), observaciones], function(err) {
-            if (err) { db.run('ROLLBACK'); return res.status(500).json({ status: 'error', message: err.message }); }
+        const ordenId = this.lastID;
+        let index = 0;
 
-            const ordenId = this.lastID;
-            const queryDetalle = `INSERT INTO detalle_orden (orden_id, servicio_id, cantidad, precio_unitario, subtotal_item, observacion_prenda) VALUES (?, ?, ?, ?, ?, ?)`;
-            const stmt = db.prepare(queryDetalle);
-            let errorOcurrido = false;
-
-            items.forEach(item => {
-                const subItem = item.cantidad * item.precio_unitario;
-                stmt.run([ordenId, item.servicio_id, item.cantidad, item.precio_unitario, subItem, item.observacion_prenda || ''], (e) => { if(e) errorOcurrido = true; });
-            });
-
-            stmt.finalize(() => {
-                if (errorOcurrido) { db.run('ROLLBACK'); return res.status(500).json({ status: 'error', message: 'Error al registrar ítems.' }); }
-
+        function insertarSiguienteItem() {
+            if (index >= items.length) {
+                // Registrar abono en caja si aplica
                 if (montoAbono > 0) {
                     db.get(`SELECT id FROM turnos_caja WHERE estado = 'ABIERTA' ORDER BY id DESC LIMIT 1`, [], (errCaja, turno) => {
                         if (turno) {
@@ -132,17 +115,40 @@ const crearOrden = (req, res) => {
                     });
                 }
 
-                db.run('COMMIT');
+                return res.status(201).json({ 
+                    status: 'success', 
+                    message: 'Orden creada exitosamente.', 
+                    ordenId, 
+                    codigo_orden 
+                });
+            }
 
-                db.get(`SELECT o.*, c.nombre_completo as cliente_nombre, c.telefono as cliente_telefono, c.numero_identificacion as cliente_cedula, c.direccion as cliente_direccion FROM ordenes o LEFT JOIN clientes c ON o.cliente_id = c.id WHERE o.id = ?`, [ordenId], (errGet, ordenCompleta) => {
-                    db.all(`SELECT d.*, s.nombre as servicio_nombre FROM detalle_orden d LEFT JOIN servicios s ON d.servicio_id = s.id WHERE d.orden_id = ?`, [ordenId], (errDet, itemsCompletos) => {
-                        res.status(201).json({ 
-                            status: 'success', 
-                            message: 'Orden creada exitosamente.', 
-                            ordenId, 
-                            codigo_orden,
-                            orden: { ...ordenCompleta, items: itemsCompletos } 
-                        });
+            const item = items[index];
+            const subItem = item.cantidad * item.precio_unitario;
+            const queryDetalle = `INSERT INTO detalle_orden (orden_id, servicio_id, cantidad, precio_unitario, subtotal_item, observacion_prenda) VALUES (?, ?, ?, ?, ?, ?)`;
+            
+            db.run(queryDetalle, [ordenId, item.servicio_id, item.cantidad, item.precio_unitario, subItem, item.observacion_prenda || ''], (errDet) => {
+                if (errDet) {
+                    return res.status(500).json({ status: 'error', message: errDet.message });
+                }
+                index++;
+                insertarSiguienteItem();
+            });
+        }
+
+        insertarSiguienteItem();
+    });
+};
+
+const eliminarOrden = (req, res) => {
+    const { id } = req.params;
+    db.serialize(() => {
+        db.run(`DELETE FROM detalle_orden WHERE orden_id = ?`, [id], () => {
+            db.run(`DELETE FROM movimientos_caja WHERE orden_id = ?`, [id], () => {
+                db.run(`DELETE FROM historial_estados WHERE orden_id = ?`, [id], () => {
+                    db.run(`DELETE FROM ordenes WHERE id = ?`, [id], (errOrd) => {
+                        if (errOrd) return res.status(500).json({ status: 'error', message: errOrd.message });
+                        res.json({ status: 'success', message: 'Orden eliminada correctamente.' });
                     });
                 });
             });
@@ -150,27 +156,6 @@ const crearOrden = (req, res) => {
     });
 };
 
-// Eliminar orden de forma segura
-const eliminarOrden = (req, res) => {
-    const { id } = req.params;
-    db.serialize(() => {
-        db.run('BEGIN TRANSACTION');
-        db.run(`DELETE FROM detalle_orden WHERE orden_id = ?`, [id], (errDet) => {
-            if (errDet) { db.run('ROLLBACK'); return res.status(500).json({ status: 'error', message: errDet.message }); }
-            db.run(`DELETE FROM movimientos_caja WHERE orden_id = ?`, [id], (errMov) => {
-                if (errMov) { db.run('ROLLBACK'); return res.status(500).json({ status: 'error', message: errMov.message }); }
-                db.run(`DELETE FROM historial_estados WHERE orden_id = ?`, [errHist => {}]);
-                db.run(`DELETE FROM ordenes WHERE id = ?`, [id], (errOrd) => {
-                    if (errOrd) { db.run('ROLLBACK'); return res.status(500).json({ status: 'error', message: errOrd.message }); }
-                    db.run('COMMIT');
-                    res.json({ status: 'success', message: 'Orden eliminada correctamente.' });
-                });
-            });
-        });
-    });
-};
-
-// Actualizar estado y ubicación de una orden
 const actualizarEstadoOrden = (req, res) => {
     const { id } = req.params;
     const { estado, ubicacion_fisica, abonar_adicional = 0 } = req.body;
@@ -209,7 +194,6 @@ const actualizarEstadoOrden = (req, res) => {
     });
 };
 
-// Generar enlace detallado para notificación de WhatsApp diferenciando recepción y listo para entrega
 const obtenerMensajeWhatsapp = (req, res) => {
     const { id } = req.params;
 
