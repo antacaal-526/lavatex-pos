@@ -421,7 +421,6 @@ app.delete('/api/ordenes/:id', async (req, res) => {
         }
         const ordenIdReal = ordenRes.rows[0].id;
 
-        // Desactivar restricciones de llaves foráneas temporalmente para permitir el borrado sin conflictos
         await db.execute(`PRAGMA foreign_keys = OFF;`);
         await db.execute({ sql: `DELETE FROM orden_items WHERE orden_id = ?`, args: [ordenIdReal] });
         await db.execute({ sql: `DELETE FROM ordenes WHERE id = ?`, args: [ordenIdReal] });
@@ -465,7 +464,13 @@ app.get('/api/ordenes/:id/whatsapp', async (req, res) => {
             return desc;
         }).join('\n');
 
-        let mensaje = `🧺 LAVASECO LAVATEX\n\n¡Hola ${orden.cliente_nombre}! Su recibo *${orden.codigo_orden}* está listo.\n\n📋 Detalle:\n${detallePrendas}\n\n💰 Total: $${Number(orden.total).toLocaleString('es-CO')} COP\n💵 Abono: $${Number(orden.abono).toLocaleString('es-CO')} COP\n🔴 Saldo: $${Number(orden.saldo).toLocaleString('es-CO')} COP\n\n¡Lo esperamos en Calle 19A # 10-81 Pasaje de Vargas!`;
+        let fechaEntregaTexto = 'No especificada';
+        if (orden.fecha_entrega_estimada) {
+            const partes = orden.fecha_entrega_estimada.split('T')[0].split('-');
+            if(partes.length === 3) fechaEntregaTexto = `${partes[2]}/${partes[1]}/${partes[0]}`;
+        }
+
+        let mensaje = `🧺 LAVASECO LAVATEX\n\n¡Hola ${orden.cliente_nombre}! Su recibo *${orden.codigo_orden}* está listo.\n\n📅 Fecha de Entrega: ${fechaEntregaTexto}\n\n📋 Detalle:\n${detallePrendas}\n\n💰 Total: $${Number(orden.total).toLocaleString('es-CO')} COP\n💵 Abono: $${Number(orden.abono).toLocaleString('es-CO')} COP\n🔴 Saldo: $${Number(orden.saldo).toLocaleString('es-CO')} COP\n\n⚠️ *Plazo máximo de retiro: 90 días.*\n\n¡Lo esperamos en Calle 19A # 10-81 Pasaje de Vargas!`;
 
         let urlWhatsapp = `https://api.whatsapp.com/send?phone=57${telefonoLimpio}&text=${encodeURIComponent(mensaje)}`;
         res.json({ status: 'success', urlWhatsapp });
