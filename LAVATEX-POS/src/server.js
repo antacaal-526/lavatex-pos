@@ -25,7 +25,6 @@ const db = createClient({
 console.log('Conectado a la base de datos en Turso Cloud (modo web/http).');
 inicializarBaseDatos();
 
-// Inicializar Tablas en Turso
 async function inicializarBaseDatos() {
     try {
         await db.execute(`CREATE TABLE IF NOT EXISTS clientes (
@@ -335,12 +334,10 @@ app.post('/api/ordenes', async (req, res) => {
     const fechaRecepcionLocal = new Date(fechaHoraColombia).toISOString().slice(0, 19).replace('T', ' ');
 
     try {
-        // Cálculo del consecutivo secuencial exacto en base de datos para iniciar en 0001
         const countRow = await db.execute(`SELECT COUNT(*) as total FROM ordenes`);
         const totalRegistros = Number(countRow.rows[0].total) || 0;
         let codigoOrden = String(totalRegistros + 1).padStart(4, '0');
 
-        // Validar unicidad por seguridad extrema
         let existe = await db.execute({ sql: `SELECT id FROM ordenes WHERE codigo_orden = ?`, args: [codigoOrden] });
         let intento = totalRegistros + 1;
         while (existe.rows.length > 0) {
@@ -387,7 +384,7 @@ app.put('/api/ordenes/:id/estado', async (req, res) => {
     const { estado, ubicacion_fisica, abonar_adicional } = req.body;
 
     try {
-        const ordenRes = await db.execute({ sql: `SELECT * FROM ordenes WHERE id = ?`, args: [id] });
+        const ordenRes = await db.execute({ sql: `SELECT * FROM ordenes WHERE id = ? OR codigo_orden = ?`, args: [id, id] });
         if (ordenRes.rows.length === 0) return res.status(404).json({ status: 'error', message: 'Orden no encontrada' });
         
         const orden = ordenRes.rows[0];
@@ -396,7 +393,7 @@ app.put('/api/ordenes/:id/estado', async (req, res) => {
 
         await db.execute({
             sql: `UPDATE ordenes SET estado = ?, ubicacion_fisica = ?, abono = ?, saldo = ? WHERE id = ?`,
-            args: [estado, ubicacion_fisica, nuevoAbono, nuevoSaldo, id]
+            args: [estado, ubicacion_fisica, nuevoAbono, nuevoSaldo, orden.id]
         });
 
         if (abonar_adicional > 0) {
@@ -418,8 +415,15 @@ app.put('/api/ordenes/:id/estado', async (req, res) => {
 app.delete('/api/ordenes/:id', async (req, res) => {
     const { id } = req.params;
     try {
-        await db.execute({ sql: `DELETE FROM orden_items WHERE orden_id = ?`, args: [id] });
-        await db.execute({ sql: `DELETE FROM ordenes WHERE id = ?`, args: [id] });
+        // Buscar la orden ya sea por su id numérico o por codigo_orden alfanumérico
+        const ordenRes = await db.execute({ sql: `SELECT id FROM ordenes WHERE id = ? OR codigo_orden = ?`, args: [id, id] });
+        if (ordenRes.rows.length === 0) {
+            return res.status(404).json({ status: 'error', message: 'Orden no encontrada en la base de datos.' });
+        }
+        const ordenIdReal = ordenRes.rows[0].id;
+
+        await db.execute({ sql: `DELETE FROM orden_items WHERE orden_id = ?`, args: [ordenIdReal] });
+        await db.execute({ sql: `DELETE FROM ordenes WHERE id = ?`, args: [ordenIdReal] });
         res.json({ status: 'success', message: 'Orden eliminada con éxito' });
     } catch (err) {
         console.error("Error al eliminar orden:", err.message);
@@ -435,9 +439,9 @@ app.get('/api/ordenes/:id/whatsapp', async (req, res) => {
             SELECT o.*, c.nombre_completo as cliente_nombre, c.telefono as cliente_telefono 
             FROM ordenes o 
             LEFT JOIN clientes c ON o.cliente_id = c.id 
-            WHERE o.id = ?
+            WHERE o.id = ? OR o.codigo_orden = ?
         `;
-        const ordenRes = await db.execute({ sql: qOrden, args: [id] });
+        const ordenRes = await db.execute({ sql: qOrden, args: [id, id] });
         if (ordenRes.rows.length === 0) return res.status(404).json({ status: 'error', message: 'Orden no encontrada' });
         
         const orden = ordenRes.rows[0];
@@ -445,7 +449,7 @@ app.get('/api/ordenes/:id/whatsapp', async (req, res) => {
 
         const itemsRes = await db.execute({
             sql: `SELECT oi.*, s.nombre as servicio_nombre FROM orden_items oi LEFT JOIN servicios s ON oi.servicio_id = s.id WHERE oi.orden_id = ?`,
-            args: [id]
+            args: [orden.id]
         });
 
         let telefonoLimpio = orden.cliente_telefono.replace(/\D/g, '');
@@ -474,15 +478,15 @@ app.get('/api/caja/ticket/:id', async (req, res) => {
             SELECT o.*, c.nombre_completo as cliente_nombre, c.numero_identificacion as cliente_cedula, c.telefono as cliente_telefono 
             FROM ordenes o 
             LEFT JOIN clientes c ON o.cliente_id = c.id 
-            WHERE o.id = ?
+            WHERE o.id = ? OR o.codigo_orden = ?
         `;
-        const ordenRes = await db.execute({ sql: qOrden, args: [id] });
+        const ordenRes = await db.execute({ sql: qOrden, args: [id, id] });
         if (ordenRes.rows.length === 0) return res.status(404).json({ status: 'error', message: 'Orden no encontrada' });
         
         const orden = ordenRes.rows[0];
         const itemsRes = await db.execute({
             sql: `SELECT oi.*, s.nombre as servicio_nombre FROM orden_items oi LEFT JOIN servicios s ON oi.servicio_id = s.id WHERE oi.orden_id = ?`,
-            args: [id]
+            args: [orden.id]
         });
 
         res.json({ status: 'success', ticket: { orden, items: itemsRes.rows } });
