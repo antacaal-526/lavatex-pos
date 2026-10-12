@@ -45,7 +45,7 @@ async function inicializarBaseDatos() {
             rol TEXT NOT NULL
         )`);
 
-        // Crear un usuario administrador por defecto si la tabla está vacía
+        // Crear un usuario administrador por defecto si la tabla está totalmente vacía
         const resUser = await db.execute(`SELECT COUNT(*) as count FROM usuarios`);
         if (resUser.rows[0].count === 0) {
             await db.execute({

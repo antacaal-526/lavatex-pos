@@ -646,7 +646,7 @@
                         <td>${u.usuario}</td>
                         <td><span style="font-weight:bold; color:${u.rol === 'admin' ? 'var(--primary)' : 'var(--success)'};">${u.rol.toUpperCase()}</span></td>
                         <td>
-                            ${u.usuario !== 'admin' ? `<button onclick="eliminarUsuario(${u.id})" class="btn-danger">Eliminar</button>` : '<span style="color:var(--text-muted); font-size:12px;">Protegido</span>'}
+                            <button onclick="eliminarUsuario(${u.id})" class="btn-danger">Eliminar</button>
                         </td>
                     </tr>
                 `).join('');
