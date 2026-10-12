@@ -45,7 +45,6 @@ async function inicializarBaseDatos() {
             rol TEXT NOT NULL
         )`);
 
-        // Crear un usuario administrador por defecto si la tabla está totalmente vacía
         const resUser = await db.execute(`SELECT COUNT(*) as count FROM usuarios`);
         if (resUser.rows[0].count === 0) {
             await db.execute({
@@ -336,9 +335,19 @@ app.post('/api/ordenes', async (req, res) => {
     const fechaRecepcionLocal = new Date(fechaHoraColombia).toISOString().slice(0, 19).replace('T', ' ');
 
     try {
-        const maxRow = await db.execute(`SELECT MAX(id) as max_id FROM ordenes`);
-        let nextId = (maxRow.rows[0] && maxRow.rows[0].max_id) ? maxRow.rows[0].max_id + 1 : 1;
-        let codigoOrden = String(nextId).padStart(4, '0');
+        // Cálculo del consecutivo secuencial exacto en base de datos para iniciar en 0001
+        const countRow = await db.execute(`SELECT COUNT(*) as total FROM ordenes`);
+        const totalRegistros = Number(countRow.rows[0].total) || 0;
+        let codigoOrden = String(totalRegistros + 1).padStart(4, '0');
+
+        // Validar unicidad por seguridad extrema
+        let existe = await db.execute({ sql: `SELECT id FROM ordenes WHERE codigo_orden = ?`, args: [codigoOrden] });
+        let intento = totalRegistros + 1;
+        while (existe.rows.length > 0) {
+            intento++;
+            codigoOrden = String(intento).padStart(4, '0');
+            existe = await db.execute({ sql: `SELECT id FROM ordenes WHERE codigo_orden = ?`, args: [codigoOrden] });
+        }
 
         const queryOrden = `INSERT INTO ordenes (codigo_orden, cliente_id, subtotal, total, abono, saldo, fecha_recepcion, fecha_entrega_estimada, estado, ubicacion_fisica, observaciones) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Recibido', 'Estantería Principal', ?)`;
         
@@ -413,6 +422,7 @@ app.delete('/api/ordenes/:id', async (req, res) => {
         await db.execute({ sql: `DELETE FROM ordenes WHERE id = ?`, args: [id] });
         res.json({ status: 'success', message: 'Orden eliminada con éxito' });
     } catch (err) {
+        console.error("Error al eliminar orden:", err.message);
         res.status(500).json({ status: 'error', message: err.message });
     }
 });
