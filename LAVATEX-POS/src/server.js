@@ -415,17 +415,21 @@ app.put('/api/ordenes/:id/estado', async (req, res) => {
 app.delete('/api/ordenes/:id', async (req, res) => {
     const { id } = req.params;
     try {
-        // Buscar la orden ya sea por su id numérico o por codigo_orden alfanumérico
         const ordenRes = await db.execute({ sql: `SELECT id FROM ordenes WHERE id = ? OR codigo_orden = ?`, args: [id, id] });
         if (ordenRes.rows.length === 0) {
             return res.status(404).json({ status: 'error', message: 'Orden no encontrada en la base de datos.' });
         }
         const ordenIdReal = ordenRes.rows[0].id;
 
+        // Desactivar restricciones de llaves foráneas temporalmente para permitir el borrado sin conflictos
+        await db.execute(`PRAGMA foreign_keys = OFF;`);
         await db.execute({ sql: `DELETE FROM orden_items WHERE orden_id = ?`, args: [ordenIdReal] });
         await db.execute({ sql: `DELETE FROM ordenes WHERE id = ?`, args: [ordenIdReal] });
+        await db.execute(`PRAGMA foreign_keys = ON;`);
+
         res.json({ status: 'success', message: 'Orden eliminada con éxito' });
     } catch (err) {
+        await db.execute(`PRAGMA foreign_keys = ON;`);
         console.error("Error al eliminar orden:", err.message);
         res.status(500).json({ status: 'error', message: err.message });
     }
