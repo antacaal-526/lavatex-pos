@@ -42,7 +42,7 @@
         .header-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }
         .header-title h1 { font-size: 24px; color: var(--text-main); }
         .header-title p { color: var(--text-muted); font-size: 14px; }
-        .status-badge { background-color: var(--success-bg); color: var(--success); padding: 6px 14px; border-radius: 20px; font-size: 13px; font-weight: 600; }
+        .status-badge { background-color: var(--success-bg); color: var(--success); padding: 6px 14px; border-radius: 20px; font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 6px; }
         
         .section-view { display: none; }
         .section-view.active { display: block; }
@@ -58,7 +58,7 @@
         }
         
         .card { background: var(--white); border-radius: 12px; padding: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.04); border: 1px solid var(--border); margin-bottom: 20px; }
-        .card h2 { font-size: 18px; margin-bottom: 20px; color: var(--text-main); border-bottom: 2px solid var(--border); padding-bottom: 10px; }
+        .card h2 { font-size: 18px; margin-bottom: 20px; color: var(--text-main); border-bottom: 2px solid var(--border); padding-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
         
         .form-group { margin-bottom: 15px; position: relative; }
         .form-group label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 5px; color: var(--text-muted); }
@@ -80,6 +80,7 @@
         .btn-wa:hover { background-color: #1ebc57; }
         .btn-danger { background-color: #dc2626; color: white; border: none; padding: 8px 12px; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 13px; }
         .btn-danger:hover { background-color: #b91c1c; }
+        .btn-sm { padding: 6px 12px; font-size: 13px; width: auto; }
 
         .table-container { overflow-x: auto; width: 100%; }
         table { width: 100%; border-collapse: collapse; font-size: 14px; white-space: nowrap; }
@@ -175,7 +176,7 @@
                 <h1 id="viewTitle">Módulo de Clientes</h1>
                 <p id="viewSubtitle">Gestión de clientes y fichas de contacto</p>
             </div>
-            <div class="status-badge">● En Línea</div>
+            <div class="status-badge"><span>● En Línea</span> <button onclick="sincronizarDatosActuales()" class="btn btn-sm" style="background:#166534; padding:2px 8px; font-size:11px; margin-left:5px;">🔄 Refrescar</button></div>
         </div>
 
         <!-- VISTA CLIENTES -->
@@ -502,6 +503,7 @@
     <script>
         let clientesCache = [], serviciosCache = [], ordenesCache = [], itemsOrdenActual = [], insumosCache = [], serviciosAdminCache = [], usuariosCache = [];
         let usuarioSesion = JSON.parse(localStorage.getItem('lavatex_sesion')) || null;
+        let vistaActualActiva = 'clientes';
 
         window.onload = function() {
             if(!usuarioSesion) {
@@ -509,6 +511,11 @@
             } else {
                 aplicarPermisosRol(usuarioSesion.rol);
             }
+
+            // Sincronización automática en segundo plano cada 4 segundos
+            setInterval(() => {
+                sincronizarDatosActuales(true);
+            }, 4000);
         };
 
         async function ejecutarLogin(e) {
@@ -591,10 +598,17 @@
             document.querySelectorAll('.section-view').forEach(el => el.classList.remove('active'));
             if(elemento) elemento.classList.add('active');
             
+            vistaActualActiva = vista;
+
             if(window.innerWidth <= 1024) {
                 document.getElementById('appSidebar').classList.remove('open');
             }
 
+            sincronizarDatosActuales();
+        }
+
+        function sincronizarDatosActuales(silencioso = false) {
+            const vista = vistaActualActiva;
             if(vista === 'clientes') {
                 document.getElementById('vista-clientes').classList.add('active');
                 cargarClientes();
@@ -627,6 +641,9 @@
             } else if(vista === 'usuarios') {
                 document.getElementById('vista-usuarios').classList.add('active');
                 cargarUsuarios();
+            }
+            if(!silencioso) {
+                console.log("Datos sincronizados manualmente.");
             }
         }
 
@@ -751,9 +768,11 @@
             const rS = await resS.json();
             if(rS.status === 'success') { serviciosCache = rS.data; }
             
-            const maniana = new Date();
-            maniana.setDate(maniana.getDate() + 1);
-            document.getElementById('fechaEntregaOrden').value = maniana.toISOString().slice(0, 10);
+            if(!document.getElementById('fechaEntregaOrden').value) {
+                const maniana = new Date();
+                maniana.setDate(maniana.getDate() + 1);
+                document.getElementById('fechaEntregaOrden').value = maniana.toISOString().slice(0, 10);
+            }
 
             cargarTablaOrdenesRecientes();
         }
