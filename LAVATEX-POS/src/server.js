@@ -251,6 +251,7 @@ app.post('/api/ordenes', async (req, res) => {
     let abonoNum = parseFloat(abono) || 0;
     let saldo = Math.max(0, total - abonoNum);
     let obsGenerales = observaciones || '';
+    let fechaEntrega = fecha_entrega_estimada || null;
 
     const fechaHoraColombia = new Date().toLocaleString('en-US', { timeZone: 'America/Bogota' });
     const fechaRecepcionLocal = new Date(fechaHoraColombia).toISOString().slice(0, 19).replace('T', ' ');
@@ -264,7 +265,7 @@ app.post('/api/ordenes', async (req, res) => {
         
         const resOrden = await db.execute({
             sql: queryOrden,
-            args: [codigoOrden, cliente_id || null, total, abonoNum, saldo, fechaRecepcionLocal, fecha_entrega_estimada, obsGenerales]
+            args: [codigoOrden, cliente_id || null, total, abonoNum, saldo, fechaRecepcionLocal, fechaEntrega, obsGenerales]
         });
 
         const ordenId = Number(resOrden.lastInsertRowid);
@@ -288,7 +289,8 @@ app.post('/api/ordenes', async (req, res) => {
 
         res.json({ status: 'success', message: 'Orden creada con éxito', ordenId, codigo_orden: codigoOrden });
     } catch (err) {
-        res.status(500).json({ status: 'error', message: err.message });
+        console.error('Error detallado al crear orden:', err.message);
+        res.status(500).json({ status: 'error', message: 'Error de base de datos: ' + err.message });
     }
 });
 
