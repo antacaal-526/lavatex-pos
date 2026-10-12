@@ -25,7 +25,7 @@ const db = createClient({
 console.log('Conectado a la base de datos en Turso Cloud (modo web/http).');
 inicializarBaseDatos();
 
-// Inicializar Tablas en Turso y asegurar compatibilidad de columnas
+// Inicializar Tablas en Turso
 async function inicializarBaseDatos() {
     try {
         await db.execute(`CREATE TABLE IF NOT EXISTS clientes (
@@ -36,6 +36,27 @@ async function inicializarBaseDatos() {
             direccion TEXT,
             correo TEXT
         )`);
+
+        await db.execute(`CREATE TABLE IF NOT EXISTS usuarios (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nombre TEXT NOT NULL,
+            usuario TEXT UNIQUE NOT NULL,
+            password TEXT NOT NULL,
+            rol TEXT NOT NULL
+        )`);
+
+        // Crear un usuario administrador por defecto si la tabla está vacía
+        const resUser = await db.execute(`SELECT COUNT(*) as count FROM usuarios`);
+        if (resUser.rows[0].count === 0) {
+            await db.execute({
+                sql: `INSERT INTO usuarios (nombre, usuario, password, rol) VALUES (?, ?, ?, ?)`,
+                args: ['Administrador', 'admin', '1234', 'admin']
+            });
+            await db.execute({
+                sql: `INSERT INTO usuarios (nombre, usuario, password, rol) VALUES (?, ?, ?, ?)`,
+                args: ['Trabajador Mostrador', 'trabajador', '1234', 'trabajador']
+            });
+        }
 
         await db.execute(`CREATE TABLE IF NOT EXISTS servicios (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -81,12 +102,9 @@ async function inicializarBaseDatos() {
             FOREIGN KEY(cliente_id) REFERENCES clientes(id)
         )`);
 
-        // Intento seguro por si la tabla ya existía sin la columna subtotal
         try {
             await db.execute(`ALTER TABLE ordenes ADD COLUMN subtotal REAL DEFAULT 0`);
-        } catch (e) {
-            // La columna ya existe, se ignora el error de forma segura
-        }
+        } catch (e) {}
 
         await db.execute(`CREATE TABLE IF NOT EXISTS orden_items (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -144,6 +162,59 @@ async function inicializarBaseDatos() {
         console.error('Error al inicializar la base de datos en Turso:', e.message);
     }
 }
+
+// API Login de Usuarios
+app.post('/api/usuarios/login', async (req, res) => {
+    const { usuario, password } = req.body;
+    try {
+        const result = await db.execute({
+            sql: `SELECT * FROM usuarios WHERE usuario = ? AND password = ?`,
+            args: [usuario, password]
+        });
+        if (result.rows.length === 0) {
+            return res.status(401).json({ status: 'error', message: 'Usuario o contraseña incorrectos.' });
+        }
+        res.json({ status: 'success', user: result.rows[0] });
+    } catch (err) {
+        res.status(500).json({ status: 'error', message: err.message });
+    }
+});
+
+// API Gestión de Usuarios (CRUD)
+app.get('/api/usuarios', async (req, res) => {
+    try {
+        const result = await db.execute(`SELECT id, nombre, usuario, rol FROM usuarios ORDER BY id DESC`);
+        res.json({ status: 'success', data: result.rows });
+    } catch (err) {
+        res.status(500).json({ status: 'error', message: err.message });
+    }
+});
+
+app.post('/api/usuarios', async (req, res) => {
+    const { nombre, usuario, password, rol } = req.body;
+    if (!nombre || !usuario || !password || !rol) {
+        return res.status(400).json({ status: 'error', message: 'Todos los campos son obligatorios.' });
+    }
+    try {
+        await db.execute({
+            sql: `INSERT INTO usuarios (nombre, usuario, password, rol) VALUES (?, ?, ?, ?)`,
+            args: [nombre, usuario, password, rol]
+        });
+        res.json({ status: 'success', message: 'Usuario creado con éxito' });
+    } catch (err) {
+        res.status(500).json({ status: 'error', message: 'El nombre de usuario ya existe o hubo un error.' });
+    }
+});
+
+app.delete('/api/usuarios/:id', async (req, res) => {
+    const { id } = req.params;
+    try {
+        await db.execute({ sql: `DELETE FROM usuarios WHERE id = ?`, args: [id] });
+        res.json({ status: 'success', message: 'Usuario eliminado correctamente' });
+    } catch (err) {
+        res.status(500).json({ status: 'error', message: err.message });
+    }
+});
 
 // API Clientes
 app.get('/api/clientes', async (req, res) => {

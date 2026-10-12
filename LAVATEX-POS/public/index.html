@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>LAVATEX POS - Sistema de Lavandería</title>
-    <!-- Importamos la fuente Archivo Black para el logotipo exacto -->
     <link href="https://fonts.googleapis.com/css2?family=Archivo+Black&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -51,10 +50,7 @@
         .grid-container { display: grid; grid-template-columns: 1fr 1.5fr; gap: 25px; }
         @media (max-width: 1024px) { 
             body { flex-direction: column; }
-            sidebar { 
-                position: fixed; top: 0; left: -280px; height: 100vh; width: 260px; 
-                box-shadow: 4px 0 15px rgba(0,0,0,0.1); 
-            }
+            sidebar { position: fixed; top: 0; left: -280px; height: 100vh; width: 260px; box-shadow: 4px 0 15px rgba(0,0,0,0.1); }
             sidebar.open { left: 0; }
             .mobile-header { display: flex; }
             .main-content { padding: 20px; margin-top: 60px; }
@@ -99,7 +95,7 @@
         .resumen-row { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 15px; }
         .resumen-row.total { font-weight: bold; font-size: 18px; color: var(--primary); border-top: 1px solid var(--border); padding-top: 8px; }
 
-        /* MODAL LOGIN / SELECCION DE ROL */
+        /* MODAL LOGIN */
         #modalLogin {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0,0,0,0.6); display: flex; justify-content: center; align-items: center; z-index: 2000; padding: 15px;
@@ -109,7 +105,6 @@
             box-shadow: 0 10px 25px rgba(0,0,0,0.2); text-align: center;
         }
 
-        /* ESTILO EXCLUSIVO LOGO TICKET */
         .ticket-logo-container { text-align: center; margin-bottom: 5px; line-height: 1.1; }
         .ticket-logo-line1 { font-family: 'Archivo Black', sans-serif; font-size: 18px; font-weight: 900; color: #166534; letter-spacing: -0.5px; text-transform: uppercase; }
         .ticket-logo-line2 { font-family: 'Archivo Black', sans-serif; font-size: 21px; font-weight: 900; color: #166534; letter-spacing: -1px; text-transform: uppercase; }
@@ -134,13 +129,18 @@
 </head>
 <body>
 
-    <!-- MODAL DE SELECCIÓN DE PERFIL / INICIO DE SESIÓN -->
+    <!-- MODAL DE INICIO DE SESIÓN -->
     <div id="modalLogin">
         <div class="login-box">
             <h2 style="color:var(--primary); margin-bottom:15px;">🧺 LAVATEX POS</h2>
-            <p style="color:var(--text-muted); font-size:14px; margin-bottom:20px;">Seleccione su perfil de usuario para ingresar al sistema:</p>
-            <button class="btn" onclick="iniciarSesion('admin')" style="margin-bottom:12px; background:var(--primary);">👑 Administrador (Acceso Total)</button>
-            <button class="btn" onclick="iniciarSesion('trabajador')" style="background:#166534;">🧑‍🔧 Trabajador (Clientes, Órdenes y Trazabilidad)</button>
+            <p style="color:var(--text-muted); font-size:14px; margin-bottom:20px;">Ingrese sus credenciales de acceso:</p>
+            <div id="formAlertLogin" class="alert"></div>
+            <form onsubmit="ejecutarLogin(event)">
+                <div class="form-group" style="text-align:left;"><label>Usuario</label><input type="text" id="loginUsuario" class="form-control" required placeholder="Ej. admin"></div>
+                <div class="form-group" style="text-align:left;"><label>Contraseña</label><input type="password" id="loginPassword" class="form-control" required placeholder="••••"></div>
+                <button type="submit" class="btn" style="margin-top:10px;">Iniciar Sesión</button>
+            </form>
+            <p style="margin-top:15px; font-size:12px; color:var(--text-muted);">Por defecto Admin: <strong>admin</strong> / <strong>1234</strong></p>
         </div>
     </div>
 
@@ -164,8 +164,9 @@
         <a class="nav-item" data-role="admin" onclick="cambiarVista('caja', this)">📊 Caja y Finanzas</a>
         <a class="nav-item" data-role="admin" onclick="cambiarVista('insumos', this)">🧪 Inventario de Insumos</a>
         <a class="nav-item" data-role="admin" onclick="cambiarVista('reportes', this)">📈 Reportes y Métricas</a>
+        <a class="nav-item" data-role="admin" onclick="cambiarVista('usuarios', this)">🔑 Gestión de Usuarios</a>
         
-        <a class="nav-item" onclick="cerrarSesion()" style="margin-top:auto; background:#fee2e2; color:#991b1b; text-align:center;">🚪 Cambiar Perfil</a>
+        <a class="nav-item" onclick="cerrarSesion()" style="margin-top:auto; background:#fee2e2; color:#991b1b; text-align:center;">🚪 Cerrar Sesión</a>
     </sidebar>
 
     <div class="main-content" onclick="cerrarSidebarFuera(event)">
@@ -433,6 +434,38 @@
             </div>
         </div>
 
+        <!-- VISTA GESTIÓN DE USUARIOS -->
+        <div id="vista-usuarios" class="section-view">
+            <div class="grid-container">
+                <div class="card">
+                    <h2>Crear Nuevo Usuario</h2>
+                    <div id="formAlertUsuario" class="alert"></div>
+                    <form id="usuarioForm" onsubmit="registrarUsuario(event)">
+                        <div class="form-group"><label>Nombre Completo *</label><input type="text" id="nuevo_nombre_usuario" class="form-control" required placeholder="Ej. Carlos Pérez"></div>
+                        <div class="form-group"><label>Nombre de Usuario (Login) *</label><input type="text" id="nuevo_user_login" class="form-control" required placeholder="Ej. carlos"></div>
+                        <div class="form-group"><label>Contraseña *</label><input type="password" id="nuevo_password" class="form-control" required placeholder="Contraseña de acceso"></div>
+                        <div class="form-group">
+                            <label>Rol del Usuario *</label>
+                            <select id="nuevo_rol" class="form-control" required>
+                                <option value="trabajador">Trabajador (Mostrador / Órdenes)</option>
+                                <option value="admin">Administrador (Acceso Total)</option>
+                            </select>
+                        </div>
+                        <button type="submit" class="btn">Guardar Usuario</button>
+                    </form>
+                </div>
+                <div class="card">
+                    <h2>Usuarios del Sistema</h2>
+                    <div class="table-container">
+                        <table>
+                            <thead><tr><th>Nombre</th><th>Usuario</th><th>Rol</th><th>Acción</th></tr></thead>
+                            <tbody id="usuariosTableBody"><tr><td colspan="4" style="text-align: center;">Cargando...</td></tr></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
     </div>
 
     <!-- MODAL TICKET -->
@@ -467,26 +500,50 @@
     </div>
 
     <script>
-        let clientesCache = [], serviciosCache = [], ordenesCache = [], itemsOrdenActual = [], insumosCache = [], serviciosAdminCache = [];
-        let usuarioRol = localStorage.getItem('lavatex_rol') || null;
+        let clientesCache = [], serviciosCache = [], ordenesCache = [], itemsOrdenActual = [], insumosCache = [], serviciosAdminCache = [], usuariosCache = [];
+        let usuarioSesion = JSON.parse(localStorage.getItem('lavatex_sesion')) || null;
 
         window.onload = function() {
-            if(!usuarioRol) {
+            if(!usuarioSesion) {
                 document.getElementById('modalLogin').style.display = 'flex';
             } else {
-                aplicarPermisosRol(usuarioRol);
+                aplicarPermisosRol(usuarioSesion.rol);
             }
         };
 
-        function iniciarSesion(rol) {
-            usuarioRol = rol;
-            localStorage.setItem('lavatex_rol', rol);
-            document.getElementById('modalLogin').style.display = 'none';
-            aplicarPermisosRol(rol);
+        async function ejecutarLogin(e) {
+            e.preventDefault();
+            const alertBox = document.getElementById('formAlertLogin');
+            const usuario = document.getElementById('loginUsuario').value.trim();
+            const password = document.getElementById('loginPassword').value.trim();
+
+            try {
+                const res = await fetch('/api/usuarios/login', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ usuario, password })
+                });
+                const result = await res.json();
+
+                if(res.ok) {
+                    usuarioSesion = result.user;
+                    localStorage.setItem('lavatex_sesion', JSON.stringify(usuarioSesion));
+                    document.getElementById('modalLogin').style.display = 'none';
+                    aplicarPermisosRol(usuarioSesion.rol);
+                } else {
+                    alertBox.className = 'alert alert-error';
+                    alertBox.innerText = result.message;
+                    alertBox.style.display = 'block';
+                }
+            } catch (err) {
+                alertBox.className = 'alert alert-error';
+                alertBox.innerText = 'Error de conexión con el servidor.';
+                alertBox.style.display = 'block';
+            }
         }
 
         function cerrarSesion() {
-            localStorage.removeItem('lavatex_rol');
+            localStorage.removeItem('lavatex_sesion');
             location.reload();
         }
 
@@ -494,12 +551,11 @@
             const badge = document.getElementById('userBadge');
             const itemsNav = document.querySelectorAll('sidebar .nav-item[data-role]');
 
+            badge.innerText = `Usuario: ${usuarioSesion.nombre} (${rol.toUpperCase()})`;
+
             if(rol === 'admin') {
-                badge.innerText = 'Perfil: Administrador';
                 itemsNav.forEach(el => el.classList.remove('hidden'));
-                cambiarVista('clientes', document.querySelector('.nav-item'));
             } else {
-                badge.innerText = 'Perfil: Trabajador';
                 itemsNav.forEach(el => {
                     if(el.getAttribute('data-role') === 'admin') {
                         el.classList.add('hidden');
@@ -507,8 +563,8 @@
                         el.classList.remove('hidden');
                     }
                 });
-                cambiarVista('clientes', document.querySelector('.nav-item'));
             }
+            cambiarVista('clientes', document.querySelector('.nav-item'));
         }
 
         function formatoMoneda(valor) {
@@ -568,6 +624,71 @@
                     document.getElementById('filtroFechaFin').value = hoy;
                 }
                 cargarReportes();
+            } else if(vista === 'usuarios') {
+                document.getElementById('vista-usuarios').classList.add('active');
+                cargarUsuarios();
+            }
+        }
+
+        async function cargarUsuarios() {
+            const res = await fetch('/api/usuarios');
+            const result = await res.json();
+            if(result.status === 'success') {
+                usuariosCache = result.data;
+                const tbody = document.getElementById('usuariosTableBody');
+                if(usuariosCache.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="4" style="text-align: center;">No hay usuarios registrados.</td></tr>`;
+                    return;
+                }
+                tbody.innerHTML = usuariosCache.map(u => `
+                    <tr>
+                        <td><strong>${u.nombre}</strong></td>
+                        <td>${u.usuario}</td>
+                        <td><span style="font-weight:bold; color:${u.rol === 'admin' ? 'var(--primary)' : 'var(--success)'};">${u.rol.toUpperCase()}</span></td>
+                        <td>
+                            ${u.usuario !== 'admin' ? `<button onclick="eliminarUsuario(${u.id})" class="btn-danger">Eliminar</button>` : '<span style="color:var(--text-muted); font-size:12px;">Protegido</span>'}
+                        </td>
+                    </tr>
+                `).join('');
+            }
+        }
+
+        async function registrarUsuario(e) {
+            e.preventDefault();
+            const alertBox = document.getElementById('formAlertUsuario');
+            const nuevo = {
+                nombre: document.getElementById('nuevo_nombre_usuario').value,
+                usuario: document.getElementById('nuevo_user_login').value,
+                password: document.getElementById('nuevo_password').value,
+                rol: document.getElementById('nuevo_rol').value
+            };
+
+            const res = await fetch('/api/usuarios', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(nuevo) });
+            const result = await res.json();
+
+            if(res.ok) {
+                alertBox.className = 'alert alert-success';
+                alertBox.innerText = result.message;
+                alertBox.style.display = 'block';
+                document.getElementById('usuarioForm').reset();
+                cargarUsuarios();
+            } else {
+                alertBox.className = 'alert alert-error';
+                alertBox.innerText = result.message;
+                alertBox.style.display = 'block';
+            }
+            setTimeout(() => alertBox.style.display = 'none', 3000);
+        }
+
+        async function eliminarUsuario(id) {
+            if(!confirm('¿Está seguro de eliminar este usuario?')) return;
+            const res = await fetch(`/api/usuarios/${id}`, { method: 'DELETE' });
+            const result = await res.json();
+            if(res.ok) {
+                alert('Usuario eliminado con éxito.');
+                cargarUsuarios();
+            } else {
+                alert('Error al eliminar: ' + result.message);
             }
         }
 
@@ -833,7 +954,7 @@
                         <td>
                             <button onclick="verTicket(${o.id})" style="background:#0284c7; color:white; border:none; padding:4px 8px; border-radius:4px; cursor:pointer;">🧾 Recibo</button>
                             <button onclick="enviarWhatsapp(${o.id})" class="btn-wa">📲 WA</button>
-                            ${usuarioRol === 'admin' ? `<button onclick="eliminarOrden(${o.id})" class="btn-danger" style="margin-left:4px;">🗑️</button>` : ''}
+                            ${usuarioSesion.rol === 'admin' ? `<button onclick="eliminarOrden(${o.id})" class="btn-danger" style="margin-left:4px;">🗑️</button>` : ''}
                         </td>
                     </tr>
                 `).join('');
@@ -1004,7 +1125,7 @@
                         <button onclick="verTicket(${o.id})" style="background:#0284c7; color:white; border:none; padding:6px 10px; border-radius:4px; cursor:pointer; font-weight:bold; margin-right:4px;">🧾 Recibo</button>
                         <button onclick="actualizarTracking(${o.id})" style="background:#166534; color:white; border:none; padding:6px 10px; border-radius:4px; cursor:pointer; font-weight:bold; margin-right:4px;">Guardar</button>
                         <button onclick="enviarWhatsapp(${o.id})" class="btn-wa" style="margin-right:4px;">📲 Notificar</button>
-                        ${usuarioRol === 'admin' ? `<button onclick="eliminarOrden(${o.id})" class="btn-danger">🗑️</button>` : ''}
+                        ${usuarioSesion.rol === 'admin' ? `<button onclick="eliminarOrden(${o.id})" class="btn-danger">🗑️</button>` : ''}
                     </td>
                 </tr>
             `).join('');
