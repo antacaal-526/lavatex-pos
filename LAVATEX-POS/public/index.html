@@ -483,6 +483,7 @@
             <hr>
             <p id="t_codigo" style="font-weight:bold; font-size:14px;"></p>
             <p id="t_fecha"></p>
+            <p id="t_entrega" style="font-weight:bold; color:#166534; margin-top:3px;"></p>
             <p id="t_cliente" style="text-align:left; margin-top:5px;"></p>
             <hr>
             <div id="t_items" style="text-align:left;"></div>
@@ -512,7 +513,6 @@
                 aplicarPermisosRol(usuarioSesion.rol);
             }
 
-            // Sincronización automática en segundo plano cada 4 segundos
             setInterval(() => {
                 sincronizarDatosActuales(true);
             }, 4000);
@@ -641,9 +641,6 @@
             } else if(vista === 'usuarios') {
                 document.getElementById('vista-usuarios').classList.add('active');
                 cargarUsuarios();
-            }
-            if(!silencioso) {
-                console.log("Datos sincronizados manualmente.");
             }
         }
 
@@ -1228,7 +1225,18 @@
                     year: 'numeric', month: '2-digit', day: '2-digit',
                     hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true
                 });
-                document.getElementById('t_fecha').innerText = fechaOriginal;
+                document.getElementById('t_fecha').innerText = `Recepción: ${fechaOriginal}`;
+
+                if(t.orden.fecha_entrega_estimada) {
+                    const partesFecha = t.orden.fecha_entrega_estimada.split('T')[0].split('-');
+                    if(partesFecha.length === 3) {
+                        document.getElementById('t_entrega').innerText = `Fecha Entrega: ${partesFecha[2]}/${partesFecha[1]}/${partesFecha[0]}`;
+                    } else {
+                        document.getElementById('t_entrega').innerText = `Fecha Entrega: ${t.orden.fecha_entrega_estimada}`;
+                    }
+                } else {
+                    document.getElementById('t_entrega').innerText = `Fecha Entrega: No especificada`;
+                }
 
                 document.getElementById('t_cliente').innerText = `Cliente: ${t.orden.cliente_nombre || 'General'}\nCédula: ${t.orden.cliente_cedula || 'N/A'}\nTel: ${t.orden.cliente_telefono || 'N/A'}`;
                 document.getElementById('t_items').innerHTML = t.items.map(i => `<p>${i.cantidad}x ${i.servicio_nombre}${i.observacion_prenda ? ' ('+i.observacion_prenda+')' : ''} = $${formatoMoneda(i.subtotal_item)} COP</p>`).join('');
