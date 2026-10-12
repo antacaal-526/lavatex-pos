@@ -16,7 +16,7 @@ app.get('/', (req, res) => {
     res.sendFile(path.join(publicPath, 'index.html'));
 });
 
-// Conexión a Turso Cloud mediante protocolo HTTP/Web (Compatible con Render)
+// Conexión a Turso Cloud mediante protocolo HTTP/Web
 const db = createClient({
     url: process.env.TURSO_DATABASE_URL || "file:lavatex_pos.db",
     authToken: process.env.TURSO_AUTH_TOKEN || undefined
@@ -25,7 +25,7 @@ const db = createClient({
 console.log('Conectado a la base de datos en Turso Cloud (modo web/http).');
 inicializarBaseDatos();
 
-// Inicializar Tablas en Turso sin columnas obsoletas
+// Inicializar Tablas en Turso y asegurar compatibilidad de columnas
 async function inicializarBaseDatos() {
     try {
         await db.execute(`CREATE TABLE IF NOT EXISTS clientes (
@@ -69,6 +69,7 @@ async function inicializarBaseDatos() {
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             codigo_orden TEXT UNIQUE NOT NULL,
             cliente_id INTEGER,
+            subtotal REAL DEFAULT 0,
             total REAL NOT NULL,
             abono REAL DEFAULT 0,
             saldo REAL NOT NULL,
@@ -79,6 +80,13 @@ async function inicializarBaseDatos() {
             observaciones TEXT,
             FOREIGN KEY(cliente_id) REFERENCES clientes(id)
         )`);
+
+        // Intento seguro por si la tabla ya existía sin la columna subtotal
+        try {
+            await db.execute(`ALTER TABLE ordenes ADD COLUMN subtotal REAL DEFAULT 0`);
+        } catch (e) {
+            // La columna ya existe, se ignora el error de forma segura
+        }
 
         await db.execute(`CREATE TABLE IF NOT EXISTS orden_items (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -261,11 +269,11 @@ app.post('/api/ordenes', async (req, res) => {
         let nextId = (maxRow.rows[0] && maxRow.rows[0].max_id) ? maxRow.rows[0].max_id + 1 : 1;
         let codigoOrden = String(nextId).padStart(4, '0');
 
-        const queryOrden = `INSERT INTO ordenes (codigo_orden, cliente_id, total, abono, saldo, fecha_recepcion, fecha_entrega_estimada, estado, ubicacion_fisica, observaciones) VALUES (?, ?, ?, ?, ?, ?, ?, 'Recibido', 'Estantería Principal', ?)`;
+        const queryOrden = `INSERT INTO ordenes (codigo_orden, cliente_id, subtotal, total, abono, saldo, fecha_recepcion, fecha_entrega_estimada, estado, ubicacion_fisica, observaciones) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Recibido', 'Estantería Principal', ?)`;
         
         const resOrden = await db.execute({
             sql: queryOrden,
-            args: [codigoOrden, cliente_id || null, total, abonoNum, saldo, fechaRecepcionLocal, fechaEntrega, obsGenerales]
+            args: [codigoOrden, cliente_id || null, total, total, abonoNum, saldo, fechaRecepcionLocal, fechaEntrega, obsGenerales]
         });
 
         const ordenId = Number(resOrden.lastInsertRowid);
