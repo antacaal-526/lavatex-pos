@@ -240,6 +240,23 @@ app.post('/api/clientes', async (req, res) => {
     }
 });
 
+app.put('/api/clientes/:id', async (req, res) => {
+    const { id } = req.params;
+    const { nombre_completo, telefono, numero_identificacion, direccion, correo } = req.body;
+    if (!nombre_completo || !telefono) {
+        return res.status(400).json({ status: 'error', message: 'Nombre y teléfono son obligatorios.' });
+    }
+    try {
+        await db.execute({
+            sql: `UPDATE clientes SET nombre_completo = ?, telefono = ?, numero_identificacion = ?, direccion = ?, correo = ? WHERE id = ?`,
+            args: [nombre_completo, telefono, numero_identificacion, direccion, correo, id]
+        });
+        res.json({ status: 'success', message: 'Cliente actualizado correctamente' });
+    } catch (err) {
+        res.status(500).json({ status: 'error', message: err.message });
+    }
+});
+
 app.delete('/api/clientes/:id', async (req, res) => {
     const { id } = req.params;
     try {
