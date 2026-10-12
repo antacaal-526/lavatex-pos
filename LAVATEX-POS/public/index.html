@@ -954,18 +954,24 @@
                         <td>
                             <button onclick="verTicket(${o.id})" style="background:#0284c7; color:white; border:none; padding:4px 8px; border-radius:4px; cursor:pointer;">🧾 Recibo</button>
                             <button onclick="enviarWhatsapp(${o.id})" class="btn-wa">📲 WA</button>
-                            ${usuarioSesion.rol === 'admin' ? `<button onclick="eliminarOrden(${o.id})" class="btn-danger" style="margin-left:4px;">🗑️</button>` : ''}
+                            ${usuarioSesion.rol === 'admin' ? `<button onclick="eliminarOrden('${o.codigo_orden}')" class="btn-danger" style="margin-left:4px;">🗑️</button>` : ''}
                         </td>
                     </tr>
                 `).join('');
             }
         }
 
-        async function eliminarOrden(id) {
+        async function eliminarOrden(codigoOCodigoId) {
             if(!confirm('¿Está seguro de eliminar esta orden del sistema?')) return;
-            const res = await fetch(`/api/ordenes/${id}`, { method: 'DELETE' });
-            if(res.ok) { alert('Orden eliminada con éxito.'); cargarTablaOrdenesRecientes(); }
-            else { alert('No se pudo eliminar la orden.'); }
+            const res = await fetch(`/api/ordenes/${codigoOCodigoId}`, { method: 'DELETE' });
+            if(res.ok) { 
+                alert('Orden eliminada con éxito.'); 
+                cargarTablaOrdenesRecientes(); 
+                cargarDatosTracking();
+            } else { 
+                const errRes = await res.json();
+                alert('No se pudo eliminar la orden: ' + (errRes.message || 'Error desconocido')); 
+            }
         }
 
         async function cargarOrdenesParaCobro() {
@@ -1125,7 +1131,7 @@
                         <button onclick="verTicket(${o.id})" style="background:#0284c7; color:white; border:none; padding:6px 10px; border-radius:4px; cursor:pointer; font-weight:bold; margin-right:4px;">🧾 Recibo</button>
                         <button onclick="actualizarTracking(${o.id})" style="background:#166534; color:white; border:none; padding:6px 10px; border-radius:4px; cursor:pointer; font-weight:bold; margin-right:4px;">Guardar</button>
                         <button onclick="enviarWhatsapp(${o.id})" class="btn-wa" style="margin-right:4px;">📲 Notificar</button>
-                        ${usuarioSesion.rol === 'admin' ? `<button onclick="eliminarOrden(${o.id})" class="btn-danger">🗑️</button>` : ''}
+                        ${usuarioSesion.rol === 'admin' ? `<button onclick="eliminarOrden('${o.codigo_orden}')" class="btn-danger">🗑️</button>` : ''}
                     </td>
                 </tr>
             `).join('');
