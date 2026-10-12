@@ -26,9 +26,11 @@
             display: flex; flex-direction: column; padding: 20px; 
             transition: transform 0.3s ease-in-out; z-index: 1000;
         }
-        .brand { font-size: 22px; font-weight: bold; color: var(--primary); margin-bottom: 30px; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+        .brand { font-size: 22px; font-weight: bold; color: var(--primary); margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+        .user-badge { background: #e0f2fe; padding: 10px; border-radius: 8px; font-size: 13px; font-weight: bold; color: var(--primary-dark); margin-bottom: 20px; text-align: center; }
         .nav-item { padding: 12px 15px; color: var(--text-muted); text-decoration: none; border-radius: 8px; margin-bottom: 5px; font-weight: 600; cursor: pointer; transition: all 0.2s; display: block; }
         .nav-item.active, .nav-item:hover { background-color: #e0f2fe; color: var(--primary); }
+        .nav-item.hidden { display: none !important; }
         
         .mobile-header {
             display: none; background: var(--white); padding: 15px 20px; border-bottom: 1px solid var(--border);
@@ -97,28 +99,20 @@
         .resumen-row { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 15px; }
         .resumen-row.total { font-weight: bold; font-size: 18px; color: var(--primary); border-top: 1px solid var(--border); padding-top: 8px; }
 
+        /* MODAL LOGIN / SELECCION DE ROL */
+        #modalLogin {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.6); display: flex; justify-content: center; align-items: center; z-index: 2000; padding: 15px;
+        }
+        .login-box {
+            background: white; padding: 30px; border-radius: 12px; width: 100%; max-width: 400px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2); text-align: center;
+        }
+
         /* ESTILO EXCLUSIVO LOGO TICKET */
-        .ticket-logo-container {
-            text-align: center;
-            margin-bottom: 5px;
-            line-height: 1.1;
-        }
-        .ticket-logo-line1 {
-            font-family: 'Archivo Black', sans-serif;
-            font-size: 18px;
-            font-weight: 900;
-            color: #166534;
-            letter-spacing: -0.5px;
-            text-transform: uppercase;
-        }
-        .ticket-logo-line2 {
-            font-family: 'Archivo Black', sans-serif;
-            font-size: 21px;
-            font-weight: 900;
-            color: #166534;
-            letter-spacing: -1px;
-            text-transform: uppercase;
-        }
+        .ticket-logo-container { text-align: center; margin-bottom: 5px; line-height: 1.1; }
+        .ticket-logo-line1 { font-family: 'Archivo Black', sans-serif; font-size: 18px; font-weight: 900; color: #166534; letter-spacing: -0.5px; text-transform: uppercase; }
+        .ticket-logo-line2 { font-family: 'Archivo Black', sans-serif; font-size: 21px; font-weight: 900; color: #166534; letter-spacing: -1px; text-transform: uppercase; }
 
         #modalTicket {
             display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
@@ -140,6 +134,16 @@
 </head>
 <body>
 
+    <!-- MODAL DE SELECCIÓN DE PERFIL / INICIO DE SESIÓN -->
+    <div id="modalLogin">
+        <div class="login-box">
+            <h2 style="color:var(--primary); margin-bottom:15px;">🧺 LAVATEX POS</h2>
+            <p style="color:var(--text-muted); font-size:14px; margin-bottom:20px;">Seleccione su perfil de usuario para ingresar al sistema:</p>
+            <button class="btn" onclick="iniciarSesion('admin')" style="margin-bottom:12px; background:var(--primary);">👑 Administrador (Acceso Total)</button>
+            <button class="btn" onclick="iniciarSesion('trabajador')" style="background:#166534;">🧑‍🔧 Trabajador (Clientes, Órdenes y Trazabilidad)</button>
+        </div>
+    </div>
+
     <div class="mobile-header">
         <div style="font-size: 18px; font-weight: bold; color: var(--primary);">🧺 LAVATEX POS</div>
         <button class="hamburger-btn" onclick="toggleSidebar()">☰</button>
@@ -150,14 +154,18 @@
             <span>🧺 LAVATEX POS</span>
             <span style="font-size: 18px; cursor: pointer; display: none;" class="close-menu" onclick="toggleSidebar()">✕</span>
         </div>
-        <a class="nav-item active" onclick="cambiarVista('clientes', this)">👥 Clientes</a>
-        <a class="nav-item" onclick="cambiarVista('ordenes', this)">📦 Órdenes y Recepción</a>
-        <a class="nav-item" onclick="cambiarVista('cobro', this)">💳 Caja de Cobro</a>
-        <a class="nav-item" onclick="cambiarVista('seguimiento', this)">🔍 Trazabilidad y Ubicación</a>
-        <a class="nav-item" onclick="cambiarVista('servicios', this)">⚙️ Tarifas y Servicios</a>
-        <a class="nav-item" onclick="cambiarVista('caja', this)">📊 Caja y Finanzas</a>
-        <a class="nav-item" onclick="cambiarVista('insumos', this)">🧪 Inventario de Insumos</a>
-        <a class="nav-item" onclick="cambiarVista('reportes', this)">📈 Reportes y Métricas</a>
+        <div id="userBadge" class="user-badge">Perfil: ---</div>
+        
+        <a class="nav-item active" data-role="todos" onclick="cambiarVista('clientes', this)">👥 Clientes</a>
+        <a class="nav-item" data-role="todos" onclick="cambiarVista('ordenes', this)">📦 Órdenes y Recepción</a>
+        <a class="nav-item" data-role="admin" onclick="cambiarVista('cobro', this)">💳 Caja de Cobro</a>
+        <a class="nav-item" data-role="todos" onclick="cambiarVista('seguimiento', this)">🔍 Trazabilidad y Ubicación</a>
+        <a class="nav-item" data-role="admin" onclick="cambiarVista('servicios', this)">⚙️ Tarifas y Servicios</a>
+        <a class="nav-item" data-role="admin" onclick="cambiarVista('caja', this)">📊 Caja y Finanzas</a>
+        <a class="nav-item" data-role="admin" onclick="cambiarVista('insumos', this)">🧪 Inventario de Insumos</a>
+        <a class="nav-item" data-role="admin" onclick="cambiarVista('reportes', this)">📈 Reportes y Métricas</a>
+        
+        <a class="nav-item" onclick="cerrarSesion()" style="margin-top:auto; background:#fee2e2; color:#991b1b; text-align:center;">🚪 Cambiar Perfil</a>
     </sidebar>
 
     <div class="main-content" onclick="cerrarSidebarFuera(event)">
@@ -226,10 +234,7 @@
                         </div>
 
                         <div class="form-group"><label>Abono Inicial ($ COP)</label><input type="number" id="abonoOrden" value="0" min="0" class="form-control" onchange="calcularTotalesOrden()"></div>
-                        
-                        <!-- CAMBIADO A TIPO DATE PARA SOLO SELECCIONAR FECHA -->
                         <div class="form-group"><label>Fecha Estimada de Entrega (Calendario)</label><input type="date" id="fechaEntregaOrden" class="form-control"></div>
-                        
                         <div class="form-group"><label>Observaciones Generales</label><input type="text" id="observacionesOrden" class="form-control" placeholder="Ej. Entregar doblado"></div>
 
                         <div class="resumen-caja">
@@ -259,34 +264,16 @@
             <div class="card" style="max-width: 600px; margin: 0 auto;">
                 <h2 style="color:var(--primary); border-bottom:2px solid var(--border); padding-bottom:10px;">💳 Caja de Cobro y Entrega de Recibos</h2>
                 <div id="formAlertCobro" class="alert"></div>
-                
                 <div class="form-group" style="position:relative;">
                     <label>Buscar Recibo (Número de recibo o nombre de cliente) *</label>
                     <input type="text" id="inputBuscarCobroRecibo" class="form-control" placeholder="Ej. 0001 o nombre..." oninput="onInputBuscarCobroRecibo()" autocomplete="off" style="font-size:16px; font-weight:bold;">
                     <input type="hidden" id="cobro_orden_id">
                     <div id="dropdownCobroRecibos" class="dropdown-suggestions"></div>
                 </div>
-
-                <div class="form-group">
-                    <label>Cliente Titular:</label>
-                    <input type="text" id="cobro_cliente" class="form-control" readonly style="background:#f1f5f9; font-weight:bold;">
-                </div>
-
-                <div class="form-group">
-                    <label>Saldo Pendiente a Pagar ($ COP):</label>
-                    <input type="text" id="cobro_saldo_pendiente" class="form-control" readonly style="background:#fee2e2; color:#991b1b; font-weight:bold; font-size:18px;">
-                </div>
-
-                <div class="form-group">
-                    <label>Dinero Recibido del Cliente ($ COP) *</label>
-                    <input type="number" id="cobro_dinero_recibido" class="form-control" placeholder="Ej. 20000" oninput="calcularVueltasTabCobro()" style="font-size:18px; font-weight:bold;">
-                </div>
-
-                <div class="form-group">
-                    <label>Cambio / Vueltas ($ COP):</label>
-                    <input type="text" id="cobro_vueltas" class="form-control" readonly style="background:#dcfce7; color:#166534; font-weight:bold; font-size:18px;" value="$0">
-                </div>
-
+                <div class="form-group"><label>Cliente Titular:</label><input type="text" id="cobro_cliente" class="form-control" readonly style="background:#f1f5f9; font-weight:bold;"></div>
+                <div class="form-group"><label>Saldo Pendiente a Pagar ($ COP):</label><input type="text" id="cobro_saldo_pendiente" class="form-control" readonly style="background:#fee2e2; color:#991b1b; font-weight:bold; font-size:18px;"></div>
+                <div class="form-group"><label>Dinero Recibido del Cliente ($ COP) *</label><input type="number" id="cobro_dinero_recibido" class="form-control" placeholder="Ej. 20000" oninput="calcularVueltasTabCobro()" style="font-size:18px; font-weight:bold;"></div>
+                <div class="form-group"><label>Cambio / Vueltas ($ COP):</label><input type="text" id="cobro_vueltas" class="form-control" readonly style="background:#dcfce7; color:#166534; font-weight:bold; font-size:18px;" value="$0"></div>
                 <button class="btn" onclick="ejecutarCobroYEntregarTab()" style="background:#166534; padding:15px; font-size:16px; margin-top:10px;">✅ Cobrar, Abrir Cajón y Marcar Entregado</button>
             </div>
         </div>
@@ -298,15 +285,7 @@
                 <div class="form-group"><input type="text" id="searchTracking" class="form-control" placeholder="Buscar por número de recibo (ej. 0001), nombre o cédula..." onkeyup="filtrarTracking()"></div>
                 <div class="table-container">
                     <table>
-                        <thead>
-                            <tr>
-                                <th>N° Recibo</th>
-                                <th>Cliente</th>
-                                <th>Estado Actual</th>
-                                <th>Ubicación Física</th>
-                                <th>Acciones</th>
-                            </tr>
-                        </thead>
+                        <thead><tr><th>N° Recibo</th><th>Cliente</th><th>Estado Actual</th><th>Ubicación Física</th><th>Acciones</th></tr></thead>
                         <tbody id="trackingTableBody"><tr><td colspan="5" style="text-align: center;">Cargando...</td></tr></tbody>
                     </table>
                 </div>
@@ -346,7 +325,6 @@
                         <button type="button" class="btn" id="btnCancelarServicio" onclick="cancelarEdicionServicio()" style="background:#64748b; margin-top:8px; display:none;">Cancelar Edición</button>
                     </form>
                 </div>
-
                 <div class="card">
                     <h2>Servicios y Precios Vigentes</h2>
                     <div class="table-container">
@@ -366,27 +344,22 @@
                     <h2>Control Diario de Caja</h2>
                     <div id="estadoCajaBox" style="margin-bottom: 20px;">Cargando estado...</div>
                     <div id="formAlertCaja" class="alert"></div>
-
                     <div id="boxAbrirCaja" style="display:none;">
                         <h3>Apertura de Caja</h3>
                         <div class="form-group"><label>Monto Inicial de Apertura ($ COP) *</label><input type="number" id="montoApertura" class="form-control" value="50000"></div>
                         <button class="btn" onclick="abrirCaja()">Abrir Turno de Caja</button>
                     </div>
-
                     <div id="boxCajaAbierta" style="display:none;">
                         <h3>Registrar Gasto / Egreso de Caja</h3>
                         <div class="form-group"><label>Monto ($ COP) *</label><input type="number" id="montoEgreso" class="form-control" placeholder="Ej. 12000"></div>
                         <div class="form-group"><label>Concepto del Gasto *</label><input type="text" id="conceptoEgreso" class="form-control" placeholder="Ej. Compra de detergente"></div>
                         <button class="btn" onclick="registrarEgreso()" style="background:#e11d48; margin-bottom: 20px;">Registrar Egreso</button>
-
                         <hr style="margin: 20px 0;">
-
                         <h3>Cierre de Caja (Arqueo)</h3>
                         <div class="form-group"><label>Efectivo Contado en Caja ($ COP) *</label><input type="number" id="montoCierre" class="form-control" placeholder="Monto real en la caja"></div>
                         <button class="btn" onclick="cerrarCaja()" style="background:#15803d;">Cerrar Turno y Realizar Arqueo</button>
                     </div>
                 </div>
-
                 <div class="card">
                     <h2>Resumen del Turno Actual</h2>
                     <div class="resumen-caja">
@@ -406,23 +379,13 @@
                     <h2>Registrar Entrada / Salida de Insumo</h2>
                     <div id="formAlertInsumo" class="alert"></div>
                     <form id="movInsumoForm" onsubmit="registrarMovimientoInsumo(event)">
-                        <div class="form-group">
-                            <label>Seleccionar Insumo *</label>
-                            <select id="selectInsumo" class="form-control" required><option value="">-- Seleccione insumo --</option></select>
-                        </div>
-                        <div class="form-group">
-                            <label>Tipo de Movimiento *</label>
-                            <select id="tipoMovInsumo" class="form-control" required>
-                                <option value="ENTRADA_COMPRA">Entrada (+ Compra / Recarga)</option>
-                                <option value="SALIDA_CONSUMO">Salida (- Consumo en lavandería)</option>
-                            </select>
-                        </div>
+                        <div class="form-group"><label>Seleccionar Insumo *</label><select id="selectInsumo" class="form-control" required><option value="">-- Seleccione insumo --</option></select></div>
+                        <div class="form-group"><label>Tipo de Movimiento *</label><select id="tipoMovInsumo" class="form-control" required><option value="ENTRADA_COMPRA">Entrada (+ Compra / Recarga)</option><option value="SALIDA_CONSUMO">Salida (- Consumo en lavandería)</option></select></div>
                         <div class="form-group"><label>Cantidad *</label><input type="number" id="cantInsumo" class="form-control" required min="1"></div>
                         <div class="form-group"><label>Motivo / Observación</label><input type="text" id="motivoInsumo" class="form-control" placeholder="Ej. Lavado de cobijas"></div>
                         <button type="submit" class="btn">Guardar Movimiento</button>
                     </form>
                 </div>
-
                 <div class="card">
                     <h2>Stock Actual de Insumos</h2>
                     <div class="table-container">
@@ -446,7 +409,6 @@
                     <button class="btn" style="width: auto; padding: 12px 20px; background:#166534;" onclick="window.print()">🖨️ Imprimir</button>
                 </div>
             </div>
-
             <div class="grid-container">
                 <div class="card">
                     <h2>Resumen Contable y Financiero</h2>
@@ -459,7 +421,6 @@
                         <div class="resumen-row"><span>Saldos Pendientes de Cobro:</span><span id="repSaldosPendientes" style="color:#dc2626; font-weight:bold;">$0 COP</span></div>
                     </div>
                 </div>
-
                 <div class="card">
                     <h2>Desglose por Servicios</h2>
                     <div class="table-container">
@@ -507,6 +468,48 @@
 
     <script>
         let clientesCache = [], serviciosCache = [], ordenesCache = [], itemsOrdenActual = [], insumosCache = [], serviciosAdminCache = [];
+        let usuarioRol = localStorage.getItem('lavatex_rol') || null;
+
+        window.onload = function() {
+            if(!usuarioRol) {
+                document.getElementById('modalLogin').style.display = 'flex';
+            } else {
+                aplicarPermisosRol(usuarioRol);
+            }
+        };
+
+        function iniciarSesion(rol) {
+            usuarioRol = rol;
+            localStorage.setItem('lavatex_rol', rol);
+            document.getElementById('modalLogin').style.display = 'none';
+            aplicarPermisosRol(rol);
+        }
+
+        function cerrarSesion() {
+            localStorage.removeItem('lavatex_rol');
+            location.reload();
+        }
+
+        function aplicarPermisosRol(rol) {
+            const badge = document.getElementById('userBadge');
+            const itemsNav = document.querySelectorAll('sidebar .nav-item[data-role]');
+
+            if(rol === 'admin') {
+                badge.innerText = 'Perfil: Administrador';
+                itemsNav.forEach(el => el.classList.remove('hidden'));
+                cambiarVista('clientes', document.querySelector('.nav-item'));
+            } else {
+                badge.innerText = 'Perfil: Trabajador';
+                itemsNav.forEach(el => {
+                    if(el.getAttribute('data-role') === 'admin') {
+                        el.classList.add('hidden');
+                    } else {
+                        el.classList.remove('hidden');
+                    }
+                });
+                cambiarVista('clientes', document.querySelector('.nav-item'));
+            }
+        }
 
         function formatoMoneda(valor) {
             return Number(valor || 0).toLocaleString('es-CO');
@@ -582,9 +585,7 @@
                     <td><strong>${c.nombre_completo}</strong></td>
                     <td>${c.numero_identificacion || 'N/A'}</td>
                     <td>${c.telefono}</td>
-                    <td>
-                        <button onclick="eliminarCliente(${c.id})" class="btn-danger">Eliminar</button>
-                    </td>
+                    <td><button onclick="eliminarCliente(${c.id})" class="btn-danger">Eliminar</button></td>
                 </tr>
             `).join('');
         }
@@ -593,12 +594,8 @@
             if(!confirm('¿Está seguro de eliminar este cliente?')) return;
             const res = await fetch(`/api/clientes/${id}`, { method: 'DELETE' });
             const result = await res.json();
-            if(res.ok) {
-                alert('Cliente eliminado con éxito.');
-                cargarClientes();
-            } else {
-                alert('No se pudo eliminar: ' + result.message);
-            }
+            if(res.ok) { alert('Cliente eliminado con éxito.'); cargarClientes(); }
+            else { alert('No se pudo eliminar: ' + result.message); }
         }
 
         async function registrarCliente(e) {
@@ -836,7 +833,7 @@
                         <td>
                             <button onclick="verTicket(${o.id})" style="background:#0284c7; color:white; border:none; padding:4px 8px; border-radius:4px; cursor:pointer;">🧾 Recibo</button>
                             <button onclick="enviarWhatsapp(${o.id})" class="btn-wa">📲 WA</button>
-                            <button onclick="eliminarOrden(${o.id})" class="btn-danger" style="margin-left:4px;">🗑️</button>
+                            ${usuarioRol === 'admin' ? `<button onclick="eliminarOrden(${o.id})" class="btn-danger" style="margin-left:4px;">🗑️</button>` : ''}
                         </td>
                     </tr>
                 `).join('');
@@ -846,20 +843,14 @@
         async function eliminarOrden(id) {
             if(!confirm('¿Está seguro de eliminar esta orden del sistema?')) return;
             const res = await fetch(`/api/ordenes/${id}`, { method: 'DELETE' });
-            if(res.ok) {
-                alert('Orden eliminada con éxito.');
-                cargarTablaOrdenesRecientes();
-            } else {
-                alert('No se pudo eliminar la orden.');
-            }
+            if(res.ok) { alert('Orden eliminada con éxito.'); cargarTablaOrdenesRecientes(); }
+            else { alert('No se pudo eliminar la orden.'); }
         }
 
         async function cargarOrdenesParaCobro() {
             const res = await fetch('/api/ordenes');
             const result = await res.json();
-            if(result.status === 'success') {
-                ordenesCache = result.data;
-            }
+            if(result.status === 'success') { ordenesCache = result.data; }
         }
 
         function onInputBuscarCobroRecibo() {
@@ -1008,14 +999,12 @@
                             <option value="Entregado" ${o.estado === 'Entregado' ? 'selected' : ''}>Entregado</option>
                         </select>
                     </td>
-                    <td>
-                        <input type="text" id="ubicacion_${o.id}" class="form-control" value="${o.ubicacion_fisica || 'Estantería Principal'}" style="padding:4px;">
-                    </td>
+                    <td><input type="text" id="ubicacion_${o.id}" class="form-control" value="${o.ubicacion_fisica || 'Estantería Principal'}" style="padding:4px;"></td>
                     <td>
                         <button onclick="verTicket(${o.id})" style="background:#0284c7; color:white; border:none; padding:6px 10px; border-radius:4px; cursor:pointer; font-weight:bold; margin-right:4px;">🧾 Recibo</button>
                         <button onclick="actualizarTracking(${o.id})" style="background:#166534; color:white; border:none; padding:6px 10px; border-radius:4px; cursor:pointer; font-weight:bold; margin-right:4px;">Guardar</button>
                         <button onclick="enviarWhatsapp(${o.id})" class="btn-wa" style="margin-right:4px;">📲 Notificar</button>
-                        <button onclick="eliminarOrden(${o.id})" class="btn-danger">🗑️</button>
+                        ${usuarioRol === 'admin' ? `<button onclick="eliminarOrden(${o.id})" class="btn-danger">🗑️</button>` : ''}
                     </td>
                 </tr>
             `).join('');
@@ -1034,7 +1023,6 @@
                 const codigo = (o.codigo_orden || '').toLowerCase();
                 const nombre = (o.cliente_nombre || '').toLowerCase();
                 const cedula = (o.cliente_cedula || '').toLowerCase();
-                
                 return codigo.includes(texto) || nombre.includes(texto) || cedula.includes(texto);
             });
             renderizarTablaTracking(filtrados);
@@ -1058,12 +1046,8 @@
             });
 
             const result = await res.json();
-            if(res.ok) {
-                alert(`¡Estado actualizado con éxito a "${estado}"!`);
-                cargarDatosTracking();
-            } else {
-                alert('Error al actualizar: ' + result.message);
-            }
+            if(res.ok) { alert(`¡Estado actualizado con éxito a "${estado}"!`); cargarDatosTracking(); }
+            else { alert('Error al actualizar: ' + result.message); }
         }
 
         async function enviarWhatsapp(ordenId) {
@@ -1083,11 +1067,8 @@
 
             const res = await fetch(`/api/ordenes/${ordenId}/whatsapp`);
             const result = await res.json();
-            if(result.status === 'success') {
-                window.open(result.urlWhatsapp, '_blank');
-            } else {
-                alert('No se pudo generar la notificación: ' + result.message);
-            }
+            if(result.status === 'success') { window.open(result.urlWhatsapp, '_blank'); }
+            else { alert('No se pudo generar la notificación: ' + result.message); }
         }
 
         async function verTicket(ordenId) {
@@ -1097,15 +1078,9 @@
                 const t = result.ticket;
                 document.getElementById('t_codigo').innerText = `Recibo N° ${t.orden.codigo_orden}`;
                 
-                // Muestra la fecha y hora EXACTA en la que se genera/crea el recibo por primera vez
-                const fechaOriginal = new Date(t.orden.fecha_recepcion).toLocaleString('es-CO', {
-                    year: 'numeric',
-                    month: '2-digit',
-                    day: '2-digit',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    second: '2-digit',
-                    hour12: true
+                const fechaOriginal = new Date(t.orden.fecha_recepcion.replace(' ', 'T')).toLocaleString('es-CO', {
+                    year: 'numeric', month: '2-digit', day: '2-digit',
+                    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true
                 });
                 document.getElementById('t_fecha').innerText = fechaOriginal;
 
@@ -1116,7 +1091,6 @@
                 document.getElementById('t_saldo').innerText = `Saldo Pendiente: $${formatoMoneda(t.orden.saldo)} COP`;
                 
                 document.getElementById('btnWhatsAppTicket').setAttribute('onclick', `enviarWhatsapp(${ordenId})`);
-                
                 document.getElementById('modalTicket').style.display = 'flex';
             }
         }
@@ -1161,29 +1135,16 @@
 
             let url = '/api/ordenes/servicios';
             let method = 'POST';
+            if(id) { url = `/api/ordenes/servicios/${id}`; method = 'PUT'; }
 
-            if(id) {
-                url = `/api/ordenes/servicios/${id}`;
-                method = 'PUT';
-            }
-
-            const res = await fetch(url, {
-                method: method,
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify(servicioData)
-            });
+            const res = await fetch(url, { method: method, headers: {'Content-Type': 'application/json'}, body: JSON.stringify(servicioData) });
             const result = await res.json();
 
             if(res.ok) {
-                alertBox.className = 'alert alert-success';
-                alertBox.innerText = result.message;
-                alertBox.style.display = 'block';
-                cancelarEdicionServicio();
-                cargarServiciosAdmin();
+                alertBox.className = 'alert alert-success'; alertBox.innerText = result.message; alertBox.style.display = 'block';
+                cancelarEdicionServicio(); cargarServiciosAdmin();
             } else {
-                alertBox.className = 'alert alert-error';
-                alertBox.innerText = result.message;
-                alertBox.style.display = 'block';
+                alertBox.className = 'alert alert-error'; alertBox.innerText = result.message; alertBox.style.display = 'block';
             }
             setTimeout(() => alertBox.style.display = 'none', 4000);
         }
@@ -1216,17 +1177,11 @@
         }
 
         async function eliminarServicio(id) {
-            if(!confirm('¿Estás seguro de eliminar este servicio?\n(Si ya ha sido usado en pedidos anteriores, el sistema lo desactivará automáticamente para proteger el historial).')) return;
-
+            if(!confirm('¿Estás seguro de eliminar este servicio?\n(Si ya ha sido usado en pedidos anteriores, el sistema lo desactivará automáticamente).')) return;
             const res = await fetch(`/api/ordenes/servicios/${id}`, { method: 'DELETE' });
             const result = await res.json();
-
-            if(res.ok) {
-                alert(result.message);
-                cargarServiciosAdmin();
-            } else {
-                alert('Error al procesar la solicitud: ' + result.message);
-            }
+            if(res.ok) { alert(result.message); cargarServiciosAdmin(); }
+            else { alert('Error al procesar la solicitud: ' + result.message); }
         }
 
         async function cargarEstadoCaja() {
@@ -1342,8 +1297,6 @@
                 `).join('');
             }
         }
-
-        cargarClientes();
     </script>
 </body>
 </html>

@@ -25,7 +25,7 @@ const db = createClient({
 console.log('Conectado a la base de datos en Turso Cloud (modo web/http).');
 inicializarBaseDatos();
 
-// Inicializar Tablas en Turso
+// Inicializar Tablas en Turso sin columnas obsoletas
 async function inicializarBaseDatos() {
     try {
         await db.execute(`CREATE TABLE IF NOT EXISTS clientes (
