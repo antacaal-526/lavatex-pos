@@ -32,7 +32,7 @@
             display: flex; flex-direction: column; padding: 20px; 
             transition: transform 0.3s ease-in-out; z-index: 1000;
         }
-        .brand { font-size: 22px; font-weight: bold; color: var(--primary); margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+        .brand { font-size: 20px; font-weight: bold; color: var(--success); margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between; gap: 10px; font-family: 'Neon3', monospace, sans-serif; text-transform: uppercase; }
         .user-badge { background: #e0f2fe; padding: 10px; border-radius: 8px; font-size: 13px; font-weight: bold; color: var(--primary-dark); margin-bottom: 20px; text-align: center; }
         .nav-item { padding: 12px 15px; color: var(--text-muted); text-decoration: none; border-radius: 8px; margin-bottom: 5px; font-weight: 600; cursor: pointer; transition: all 0.2s; display: block; }
         .nav-item.active, .nav-item:hover { background-color: #e0f2fe; color: var(--primary); }
@@ -140,21 +140,21 @@
     <!-- MODAL DE INICIO DE SESIÓN -->
     <div id="modalLogin">
         <div class="login-box">
-            <h2 style="color:var(--primary); margin-bottom:15px;">🧺 LAVATEX POS</h2>
+            <h2 style="color:var(--success); margin-bottom:15px; font-family:'Neon3', monospace;">🧺 LAVATEX POS</h2>
             <p style="color:var(--text-muted); font-size:14px; margin-bottom:20px;">Ingrese sus credenciales de acceso:</p>
             <div id="formAlertLogin" class="alert"></div>
             <form onsubmit="ejecutarLogin(event)">
                 <div class="form-group" style="text-align:left;"><label>Usuario</label><input type="text" id="loginUsuario" class="form-control" required placeholder="Ej. admin"></div>
                 <div class="form-group" style="text-align:left;"><label>Contraseña</label><input type="password" id="loginPassword" class="form-control" required placeholder="••••"></div>
-                <button type="submit" class="btn" style="margin-top:10px;">Iniciar Sesión</button>
+                <button type="submit" class="btn" style="background:var(--success); margin-top:10px;">Iniciar Sesión</button>
             </form>
             <p style="margin-top:15px; font-size:12px; color:var(--text-muted);">Por defecto Admin: <strong>admin</strong> / <strong>1234</strong></p>
         </div>
     </div>
 
     <div class="mobile-header">
-        <div style="font-size: 18px; font-weight: bold; color: var(--primary);">🧺 LAVATEX POS</div>
-        <button class="hamburger-btn" onclick="toggleSidebar()">☰</button>
+        <div class="brand" style="font-size: 16px; margin-bottom: 0;">🧺 LAVATEX POS</div>
+        <button class="hamburger-btn" onclick="toggleSidebar()" style="color: var(--success);">☰</button>
     </div>
 
     <sidebar id="appSidebar">
@@ -199,7 +199,7 @@
                         <div class="form-group"><label>Cédula / NIT *</label><input type="text" id="numero_identificacion" class="form-control" required placeholder="Número de cédula"></div>
                         <div class="form-group"><label>Dirección y Barrio</label><input type="text" id="direccion" class="form-control" placeholder="Ej. Calle 15 # 7-20"></div>
                         <div class="form-group"><label>Correo Electrónico</label><input type="email" id="correo" class="form-control" placeholder="correo@mail.com"></div>
-                        <button type="submit" class="btn" id="btnGuardarCliente">Guardar Cliente</button>
+                        <button type="submit" class="btn" id="btnGuardarCliente" style="background:var(--success);">Guardar Cliente</button>
                         <button type="button" class="btn" id="btnCancelarCliente" onclick="cancelarEdicionCliente()" style="background:#64748b; margin-top:8px; display:none;">Cancelar Edición</button>
                     </form>
                 </div>
@@ -228,7 +228,7 @@
                             <input type="text" id="inputBuscarCliente" class="form-control" placeholder="Escriba cédula o nombre..." oninput="onInputBuscarCliente()" autocomplete="off">
                             <input type="hidden" id="selectCliente" required>
                             <div id="dropdownClientes" class="dropdown-suggestions"></div>
-                            <div id="clienteSeleccionadoInfo" style="margin-top: 6px; font-size: 13px; font-weight: bold; color: var(--primary);"></div>
+                            <div id="clienteSeleccionadoInfo" style="margin-top: 6px; font-size: 13px; font-weight: bold; color: var(--success);"></div>
                         </div>
 
                         <div class="form-group">
@@ -249,12 +249,12 @@
                         <div class="form-group"><label>Observaciones Generales</label><input type="text" id="observacionesOrden" class="form-control" placeholder="Ej. Entregar doblado"></div>
 
                         <div class="resumen-caja">
-                            <div class="resumen-row total"><span>Total a Pagar:</span><span id="lblTotal">$0 COP</span></div>
+                            <div class="resumen-row total"><span>Total a Pagar:</span><span id="lblTotal" style="color:var(--success);">$0 COP</span></div>
                             <div class="resumen-row"><span>Abono:</span><span id="lblAbono">$0 COP</span></div>
                             <div class="resumen-row" style="color: #dc2626; font-weight: bold;"><span>Saldo Pendiente:</span><span id="lblSaldo">$0 COP</span></div>
                         </div>
 
-                        <button type="submit" id="btnCrearOrden" class="btn" style="margin-top: 15px;">Generar Orden y Ver Recibo</button>
+                        <button type="submit" id="btnCrearOrden" class="btn" style="background:var(--success); margin-top: 15px;">Generar Orden y Ver Recibo</button>
                     </form>
                 </div>
 
@@ -273,7 +273,7 @@
         <!-- VISTA CAJA DE COBRO -->
         <div id="vista-cobro" class="section-view">
             <div class="card" style="max-width: 600px; margin: 0 auto;">
-                <h2 style="color:var(--primary); border-bottom:2px solid var(--border); padding-bottom:10px;">💳 Caja de Cobro y Entrega de Recibos</h2>
+                <h2 style="color:var(--success); border-bottom:2px solid var(--border); padding-bottom:10px;">💳 Caja de Cobro y Entrega de Recibos</h2>
                 <div id="formAlertCobro" class="alert"></div>
                 <div class="form-group" style="position:relative;">
                     <label>Buscar Recibo (Número de recibo o nombre de cliente) *</label>
@@ -332,7 +332,7 @@
                                 <option value="0">Inactivo (Oculto)</option>
                             </select>
                         </div>
-                        <button type="submit" class="btn" id="btnGuardarServicio">Guardar Tarifa</button>
+                        <button type="submit" class="btn" id="btnGuardarServicio" style="background:var(--success);">Guardar Tarifa</button>
                         <button type="button" class="btn" id="btnCancelarServicio" onclick="cancelarEdicionServicio()" style="background:#64748b; margin-top:8px; display:none;">Cancelar Edición</button>
                     </form>
                 </div>
@@ -358,7 +358,7 @@
                     <div id="boxAbrirCaja" style="display:none;">
                         <h3>Apertura de Caja</h3>
                         <div class="form-group"><label>Monto Inicial de Apertura ($ COP) *</label><input type="number" id="montoApertura" class="form-control" value="50000"></div>
-                        <button class="btn" onclick="abrirCaja()">Abrir Turno de Caja</button>
+                        <button class="btn" style="background:var(--success);" onclick="abrirCaja()">Abrir Turno de Caja</button>
                     </div>
                     <div id="boxCajaAbierta" style="display:none;">
                         <h3>Registrar Gasto / Egreso de Caja</h3>
@@ -377,7 +377,7 @@
                         <div class="resumen-row"><span>Monto Apertura:</span><span id="lblMontoApertura">$0 COP</span></div>
                         <div class="resumen-row"><span>Total Ingresos (Abonos/Pagos):</span><span id="lblTotalIngresos">$0 COP</span></div>
                         <div class="resumen-row"><span>Total Egresos (Gastos):</span><span id="lblTotalEgresos" style="color:#e11d48;">$0 COP</span></div>
-                        <div class="resumen-row total"><span>Efectivo Esperado en Caja:</span><span id="lblSaldoEsperado">$0 COP</span></div>
+                        <div class="resumen-row total"><span>Efectivo Esperado en Caja:</span><span id="lblSaldoEsperado" style="color:var(--success);">$0 COP</span></div>
                     </div>
                 </div>
             </div>
@@ -394,7 +394,7 @@
                         <div class="form-group"><label>Tipo de Movimiento *</label><select id="tipoMovInsumo" class="form-control" required><option value="ENTRADA_COMPRA">Entrada (+ Compra / Recarga)</option><option value="SALIDA_CONSUMO">Salida (- Consumo en lavandería)</option></select></div>
                         <div class="form-group"><label>Cantidad *</label><input type="number" id="cantInsumo" class="form-control" required min="1"></div>
                         <div class="form-group"><label>Motivo / Observación</label><input type="text" id="motivoInsumo" class="form-control" placeholder="Ej. Lavado de cobijas"></div>
-                        <button type="submit" class="btn">Guardar Movimiento</button>
+                        <button type="submit" class="btn" style="background:var(--success);">Guardar Movimiento</button>
                     </form>
                 </div>
                 <div class="card">
@@ -416,7 +416,7 @@
                 <div style="display: flex; gap: 15px; align-items: flex-end; flex-wrap: wrap;">
                     <div class="form-group" style="flex: 1; min-width: 140px; margin-bottom: 0;"><label>Desde:</label><input type="date" id="filtroFechaInicio" class="form-control"></div>
                     <div class="form-group" style="flex: 1; min-width: 140px; margin-bottom: 0;"><label>Hasta:</label><input type="date" id="filtroFechaFin" class="form-control"></div>
-                    <button class="btn" style="width: auto; padding: 12px 20px;" onclick="cargarReportes()">Filtrar Fechas</button>
+                    <button class="btn" style="width: auto; padding: 12px 20px; background:var(--success);" onclick="cargarReportes()">Filtrar Fechas</button>
                     <button class="btn" style="width: auto; padding: 12px 20px; background:#166534;" onclick="window.print()">🖨️ Imprimir</button>
                 </div>
             </div>
@@ -426,7 +426,7 @@
                     <div class="resumen-caja">
                         <div class="resumen-row"><span>Total Pedidos Creados:</span><span id="repTotalPedidos">0</span></div>
                         <div class="resumen-row"><span>Valor Subtotal Vendido:</span><span id="repSubtotal">$0 COP</span></div>
-                        <div class="resumen-row total"><span>Total Vendido (Nominal):</span><span id="repTotalVendido">$0 COP</span></div>
+                        <div class="resumen-row total"><span>Total Vendido (Nominal):</span><span id="repTotalVendido" style="color:var(--success);">$0 COP</span></div>
                         <div class="resumen-row"><span>Abonos en Pedidos:</span><span id="repAbonos" style="color:#166534;">$0 COP</span></div>
                         <div class="resumen-row"><span>Dinero Recibido en Caja:</span><span id="repDineroCaja" style="color:#166534; font-weight:bold;">$0 COP</span></div>
                         <div class="resumen-row"><span>Saldos Pendientes de Cobro:</span><span id="repSaldosPendientes" style="color:#dc2626; font-weight:bold;">$0 COP</span></div>
@@ -461,7 +461,7 @@
                                 <option value="admin">Administrador (Acceso Total)</option>
                             </select>
                         </div>
-                        <button type="submit" class="btn">Guardar Usuario</button>
+                        <button type="submit" class="btn" style="background:var(--success);">Guardar Usuario</button>
                     </form>
                 </div>
                 <div class="card">
@@ -668,7 +668,7 @@
                     <tr>
                         <td><strong>${u.nombre}</strong></td>
                         <td>${u.usuario}</td>
-                        <td><span style="font-weight:bold; color:${u.rol === 'admin' ? 'var(--primary)' : 'var(--success)'};">${u.rol.toUpperCase()}</span></td>
+                        <td><span style="font-weight:bold; color:${u.rol === 'admin' ? 'var(--success)' : 'var(--success)'};">${u.rol.toUpperCase()}</span></td>
                         <td>
                             <button onclick="eliminarUsuario(${u.id})" class="btn-danger">Eliminar</button>
                         </td>
@@ -731,7 +731,7 @@
                     <td>${c.numero_identificacion || 'N/A'}</td>
                     <td>${c.telefono}</td>
                     <td>
-                        <button onclick="prepararEdicionCliente(${c.id})" style="background:#0284c7; color:white; border:none; padding:6px 10px; border-radius:4px; cursor:pointer; font-weight:bold; margin-right:4px;">Editar</button>
+                        <button onclick="prepararEdicionCliente(${c.id})" style="background:var(--success); color:white; border:none; padding:6px 10px; border-radius:4px; cursor:pointer; font-weight:bold; margin-right:4px;">Editar</button>
                         <button onclick="eliminarCliente(${c.id})" class="btn-danger">Eliminar</button>
                     </td>
                 </tr>
@@ -1025,7 +1025,7 @@
                         <td>${o.cliente_nombre || 'General'}</td>
                         <td>$${formatoMoneda(o.total)} COP</td>
                         <td>
-                            <button onclick="verTicket(${o.id})" style="background:#0284c7; color:white; border:none; padding:4px 8px; border-radius:4px; cursor:pointer;">🧾 Recibo</button>
+                            <button onclick="verTicket(${o.id})" style="background:var(--success); color:white; border:none; padding:4px 8px; border-radius:4px; cursor:pointer;">🧾 Recibo</button>
                             <button onclick="enviarWhatsapp(${o.id})" class="btn-wa">📲 WA</button>
                             ${usuarioSesion.rol === 'admin' ? `<button onclick="eliminarOrden('${o.codigo_orden}')" class="btn-danger" style="margin-left:4px;">🗑️</button>` : ''}
                         </td>
@@ -1201,7 +1201,7 @@
                     </td>
                     <td><input type="text" id="ubicacion_${o.id}" class="form-control" value="${o.ubicacion_fisica || 'Estantería Principal'}" style="padding:4px;"></td>
                     <td>
-                        <button onclick="verTicket(${o.id})" style="background:#0284c7; color:white; border:none; padding:6px 10px; border-radius:4px; cursor:pointer; font-weight:bold; margin-right:4px;">🧾 Recibo</button>
+                        <button onclick="verTicket(${o.id})" style="background:var(--success); color:white; border:none; padding:6px 10px; border-radius:4px; cursor:pointer; font-weight:bold; margin-right:4px;">🧾 Recibo</button>
                         <button onclick="actualizarTracking(${o.id})" style="background:#166534; color:white; border:none; padding:6px 10px; border-radius:4px; cursor:pointer; font-weight:bold; margin-right:4px;">Guardar</button>
                         <button onclick="enviarWhatsapp(${o.id})" class="btn-wa" style="margin-right:4px;">📲 Notificar</button>
                         ${usuarioSesion.rol === 'admin' ? `<button onclick="eliminarOrden('${o.codigo_orden}')" class="btn-danger">🗑️</button>` : ''}
@@ -1321,7 +1321,7 @@
                         <td><strong>$${formatoMoneda(s.precio)} COP</strong></td>
                         <td><span style="${s.activo === 1 ? 'color:#166534; font-weight:bold;' : 'color:#dc2626; font-weight:bold;'}">${s.activo === 1 ? 'Activo' : 'Inactivo'}</span></td>
                         <td>
-                            <button onclick="prepararEdicionServicio(${s.id})" style="background:#0284c7; color:white; border:none; padding:6px 10px; border-radius:4px; cursor:pointer; font-weight:bold; margin-right:4px;">Editar</button>
+                            <button onclick="prepararEdicionServicio(${s.id})" style="background:var(--success); color:white; border:none; padding:6px 10px; border-radius:4px; cursor:pointer; font-weight:bold; margin-right:4px;">Editar</button>
                             <button onclick="eliminarServicio(${s.id})" style="background:#dc2626; color:white; border:none; padding:6px 10px; border-radius:4px; cursor:pointer; font-weight:bold;">Eliminar</button>
                         </td>
                     </tr>
