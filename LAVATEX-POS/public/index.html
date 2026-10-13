@@ -4,8 +4,15 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>LAVATEX POS - Sistema de Lavandería</title>
-    <link href="https://fonts.googleapis.com/css2?family=Archivo+Black&display=swap" rel="stylesheet">
     <style>
+        /* Declaración de tu tipografía local 'Neon3' */
+        @font-face {
+            font-family: 'Neon3';
+            src: url('/fonts/neon_3/neon_3.ttf') format('truetype'); /* Si el archivo se llama .otf cambia la ruta o extensión según corresponda */
+            font-weight: normal;
+            font-style: normal;
+        }
+
         :root {
             --primary: #0284c7;
             --primary-dark: #0369a1;
@@ -107,8 +114,8 @@
         }
 
         .ticket-logo-container { text-align: center; margin-bottom: 5px; line-height: 1.1; }
-        .ticket-logo-line1 { font-family: 'Archivo Black', sans-serif; font-size: 18px; font-weight: 900; color: #166534; letter-spacing: -0.5px; text-transform: uppercase; }
-        .ticket-logo-line2 { font-family: 'Archivo Black', sans-serif; font-size: 21px; font-weight: 900; color: #166534; letter-spacing: -1px; text-transform: uppercase; }
+        .ticket-logo-line1 { font-family: 'Neon3', monospace, sans-serif; font-size: 17px; font-weight: normal; color: #166534; letter-spacing: 0px; text-transform: uppercase; }
+        .ticket-logo-line2 { font-family: 'Neon3', monospace, sans-serif; font-size: 19px; font-weight: normal; color: #166534; letter-spacing: 0px; text-transform: uppercase; }
 
         #modalTicket {
             display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
