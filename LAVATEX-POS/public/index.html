@@ -32,7 +32,7 @@
             display: flex; flex-direction: column; padding: 20px; 
             transition: transform 0.3s ease-in-out; z-index: 1000;
         }
-        .brand { font-size: 16px; font-weight: normal; color: var(--success); margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between; gap: 5px; font-family: 'Neon3', monospace, sans-serif; text-transform: uppercase; white-space: nowrap; }
+        .brand { font-size: 15px; font-weight: normal; color: var(--success); margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between; gap: 6px; font-family: 'Neon3', monospace, sans-serif; text-transform: uppercase; white-space: nowrap; }
         .user-badge { background: #e0f2fe; padding: 10px; border-radius: 8px; font-size: 13px; font-weight: bold; color: var(--primary-dark); margin-bottom: 20px; text-align: center; }
         .nav-item { padding: 12px 15px; color: var(--text-muted); text-decoration: none; border-radius: 8px; margin-bottom: 5px; font-weight: 600; cursor: pointer; transition: all 0.2s; display: block; }
         .nav-item.active, .nav-item:hover { background-color: #e0f2fe; color: var(--primary); }
@@ -114,7 +114,7 @@
         }
 
         .ticket-logo-container { text-align: center; margin-bottom: 5px; line-height: 1.1; }
-        .ticket-logo-line1 { font-family: 'Neon3', monospace, sans-serif; font-size: 16px; font-weight: normal; color: #166534; letter-spacing: 0px; text-transform: uppercase; white-space: nowrap; }
+        .ticket-logo-line1 { font-family: 'Neon3', monospace, sans-serif; font-size: 15px; font-weight: normal; color: #166534; letter-spacing: 0px; text-transform: uppercase; white-space: nowrap; }
 
         #modalTicket {
             display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
@@ -139,7 +139,7 @@
     <!-- MODAL DE INICIO DE SESIÓN -->
     <div id="modalLogin">
         <div class="login-box">
-            <h2 style="color:var(--success); margin-bottom:15px; font-family:'Neon3', monospace;">🧺 LAVASECO LAVATEX</h2>
+            <h2 style="color:var(--success); margin-bottom:15px; font-family:'Neon3', monospace; font-size: 22px;">🧺 LAVASECO&nbsp;&nbsp;LAVATEX</h2>
             <p style="color:var(--text-muted); font-size:14px; margin-bottom:20px;">Ingrese sus credenciales de acceso:</p>
             <div id="formAlertLogin" class="alert"></div>
             <form onsubmit="ejecutarLogin(event)">
@@ -152,13 +152,13 @@
     </div>
 
     <div class="mobile-header">
-        <div class="brand" style="font-size: 14px; margin-bottom: 0;">🧺 LAVASECO LAVATEX</div>
+        <div class="brand" style="font-size: 15px; margin-bottom: 0;">🧺 LAVASECO&nbsp;&nbsp;LAVATEX</div>
         <button class="hamburger-btn" onclick="toggleSidebar()">☰</button>
     </div>
 
     <sidebar id="appSidebar">
         <div class="brand">
-            <span>🧺 LAVASECO LAVATEX</span>
+            <span>🧺 LAVASECO&nbsp;&nbsp;LAVATEX</span>
             <span style="font-size: 18px; cursor: pointer; display: none;" class="close-menu" onclick="toggleSidebar()">✕</span>
         </div>
         <div id="userBadge" class="user-badge">Perfil: ---</div>
@@ -481,7 +481,7 @@
     <div id="modalTicket">
         <div class="ticket-box">
             <div class="ticket-logo-container">
-                <div class="ticket-logo-line1">LAVASECO LAVATEX</div>
+                <div class="ticket-logo-line1">LAVASECO&nbsp;&nbsp;LAVATEX</div>
             </div>
             <p>NIT: 6765247-7</p>
             <p>Calle 19A # 10-81 Pasaje de Vargas</p>
