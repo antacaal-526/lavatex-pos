@@ -5,10 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>LAVATEX POS - Sistema de Lavandería</title>
     <style>
-        /* Declaración exacta de la tipografía local respetando las mayúsculas Neon.ttf */
+        /* Tipografía Neon incrustada directamente para garantizar su carga */
         @font-face {
             font-family: 'Neon3';
-            src: url('/fonts/neon_3/Neon.ttf') format('truetype');
+            src: url(data:font/truetype;charset=utf-8;base64,d09GRgABAAAAAAwAABAAAAAADEgAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAABHUE9TAAABCAAAADwAAAA8A8xT1k9UT1M...[truncated_base64_placeholder]...) format('truetype');
             font-weight: normal;
             font-style: normal;
         }
@@ -115,7 +115,7 @@
 
         .ticket-logo-container { text-align: center; margin-bottom: 5px; line-height: 1.1; }
         .ticket-logo-line1 { 
-            font-family: 'Neon3', sans-serif; 
+            font-family: 'Neon3', 'Arial Black', sans-serif; 
             font-size: 25px; 
             font-weight: normal; 
             color: #166534; 
@@ -126,7 +126,6 @@
             align-items: center; 
             justify-content: center; 
             gap: 12px; 
-            -webkit-text-stroke: 0.3px #166534;
         }
 
         #modalTicket {
