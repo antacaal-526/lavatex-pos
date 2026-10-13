@@ -114,7 +114,19 @@
         }
 
         .ticket-logo-container { text-align: center; margin-bottom: 5px; line-height: 1.1; }
-        .ticket-logo-line1 { font-family: 'Neon3', monospace, sans-serif; font-size: 25px; font-weight: normal; color: #166534; letter-spacing: 0px; text-transform: uppercase; white-space: nowrap; display: flex; align-items: center; justify-content: center; gap: 12px; }
+        .ticket-logo-line1 { 
+            font-family: 'Neon3', 'Arial Black', sans-serif; 
+            font-size: 25px; 
+            font-weight: normal; 
+            color: #166534; 
+            letter-spacing: 0.5px; 
+            text-transform: uppercase; 
+            white-space: nowrap; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            gap: 12px; 
+        }
 
         #modalTicket {
             display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
@@ -139,7 +151,7 @@
     <!-- MODAL DE INICIO DE SESIÓN -->
     <div id="modalLogin">
         <div class="login-box">
-            <h2 style="color:var(--success); margin-bottom:15px; font-family:'Neon3', monospace; font-size: 18px; display: flex; align-items: center; justify-content: center; gap: 8px;"><span>🧺</span><span>LAVASECO</span><span>LAVATEX</span></h2>
+            <h2 style="color:var(--success); margin-bottom:15px; font-family:'Neon3', 'Arial Black', sans-serif; font-size: 18px; display: flex; align-items: center; justify-content: center; gap: 8px;"><span>🧺</span><span>LAVASECO</span><span>LAVATEX</span></h2>
             <p style="color:var(--text-muted); font-size:14px; margin-bottom:20px;">Ingrese sus credenciales de acceso:</p>
             <div id="formAlertLogin" class="alert"></div>
             <form onsubmit="ejecutarLogin(event)">
@@ -1497,7 +1509,7 @@
                     tbody.innerHTML = `<tr><td colspan="3" style="text-align: center;">No hay ventas registradas en este rango de fechas.</td></tr>`;
                     return;
                 }
-                tbody.innerHTML = result.porServicio.map(s => `
+                tbody.innerHTML = result.porServo?.map || result.porServicio.map(s => `
                     <tr>
                         <td><strong>${s.servicio_nombre}</strong></td>
                         <td>${s.cantidad_total}</td>
