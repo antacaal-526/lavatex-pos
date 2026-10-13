@@ -113,16 +113,16 @@
             box-shadow: 0 10px 25px rgba(0,0,0,0.2); text-align: center;
         }
 
-        /* LOGO EN DOS LÍNEAS CON TAMAÑO 25px Y TIPOGRAFÍA NEON3 */
+        /* LOGO EN UNA SOLA LÍNEA CON TAMAÑO 30px Y TIPOGRAFÍA NEON3 */
         .ticket-logo-container { text-align: center; margin-bottom: 5px; line-height: 1.1; }
         .ticket-logo-line { 
             font-family: 'Neon3', sans-serif; 
-            font-size: 25px; 
+            font-size: 30px; 
             color: #166534; 
             text-transform: uppercase; 
-            display: block; 
+            display: inline-block; 
             text-align: center; 
-            margin-bottom: 4px;
+            white-space: nowrap;
         }
 
         #modalTicket {
@@ -148,7 +148,7 @@
     <!-- MODAL DE INICIO DE SESIÓN -->
     <div id="modalLogin">
         <div class="login-box">
-            <h2 style="color:var(--success); margin-bottom:15px; font-family:'Neon3', sans-serif; font-size: 20px; text-align: center;">LAVASECO<br>LAVATEX</h2>
+            <h2 style="color:var(--success); margin-bottom:15px; font-family:'Neon3', sans-serif; font-size: 25px; text-align: center;">LAVASECO LAVATEX</h2>
             <p style="color:var(--text-muted); font-size:14px; margin-bottom:20px;">Ingrese sus credenciales de acceso:</p>
             <div id="formAlertLogin" class="alert"></div>
             <form onsubmit="ejecutarLogin(event)">
@@ -166,9 +166,8 @@
     </div>
 
     <sidebar id="appSidebar">
-        <div class="brand" style="flex-direction: column; align-items: flex-start; line-height: 1.2;">
-            <span>LAVASECO</span>
-            <span>LAVATEX</span>
+        <div class="brand">
+            <span>LAVASECO LAVATEX</span>
             <span style="font-size: 18px; cursor: pointer; display: none; margin-left:auto;" class="close-menu" onclick="toggleSidebar()">✕</span>
         </div>
         <div id="userBadge" class="user-badge">Perfil: ---</div>
@@ -491,8 +490,7 @@
     <div id="modalTicket">
         <div class="ticket-box">
             <div class="ticket-logo-container">
-                <div class="ticket-logo-line">LAVASECO</div>
-                <div class="ticket-logo-line">LAVATEX</div>
+                <div class="ticket-logo-line">LAVASECO LAVATEX</div>
             </div>
             <p>NIT: 6765247-7</p>
             <p>Calle 19A # 10-81 Pasaje de Vargas</p>
