@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>LAVATEX POS - Sistema de Lavandería</title>
     <style>
-        /* Declaración de tu tipografía local 'Neon3' */
+        /* Declaración exacta de la tipografía local respetando las mayúsculas Neon.ttf */
         @font-face {
             font-family: 'Neon3';
             src: url('/fonts/neon_3/Neon.ttf') format('truetype');
@@ -32,7 +32,7 @@
             display: flex; flex-direction: column; padding: 20px; 
             transition: transform 0.3s ease-in-out; z-index: 1000;
         }
-        .brand { font-size: 14px; font-weight: normal; color: var(--success); margin-bottom: 20px; display: flex; align-items: center; justify-content: flex-start; gap: 8px; font-family: 'Neon3', monospace, sans-serif; text-transform: uppercase; white-space: nowrap; }
+        .brand { font-size: 14px; font-weight: normal; color: var(--success); margin-bottom: 20px; display: flex; align-items: center; justify-content: flex-start; gap: 8px; font-family: 'Neon3', sans-serif; text-transform: uppercase; white-space: nowrap; }
         .user-badge { background: #e0f2fe; padding: 10px; border-radius: 8px; font-size: 13px; font-weight: bold; color: var(--primary-dark); margin-bottom: 20px; text-align: center; }
         .nav-item { padding: 12px 15px; color: var(--text-muted); text-decoration: none; border-radius: 8px; margin-bottom: 5px; font-weight: 600; cursor: pointer; transition: all 0.2s; display: block; }
         .nav-item.active, .nav-item:hover { background-color: #e0f2fe; color: var(--primary); }
@@ -115,7 +115,7 @@
 
         .ticket-logo-container { text-align: center; margin-bottom: 5px; line-height: 1.1; }
         .ticket-logo-line1 { 
-            font-family: 'Neon3', 'Arial Black', sans-serif; 
+            font-family: 'Neon3', sans-serif; 
             font-size: 25px; 
             font-weight: normal; 
             color: #166534; 
@@ -126,6 +126,7 @@
             align-items: center; 
             justify-content: center; 
             gap: 12px; 
+            -webkit-text-stroke: 0.3px #166534;
         }
 
         #modalTicket {
@@ -151,7 +152,7 @@
     <!-- MODAL DE INICIO DE SESIÓN -->
     <div id="modalLogin">
         <div class="login-box">
-            <h2 style="color:var(--success); margin-bottom:15px; font-family:'Neon3', 'Arial Black', sans-serif; font-size: 18px; display: flex; align-items: center; justify-content: center; gap: 8px;"><span>🧺</span><span>LAVASECO</span><span>LAVATEX</span></h2>
+            <h2 style="color:var(--success); margin-bottom:15px; font-family:'Neon3', sans-serif; font-size: 18px; display: flex; align-items: center; justify-content: center; gap: 8px;"><span>🧺</span><span>LAVASECO</span><span>LAVATEX</span></h2>
             <p style="color:var(--text-muted); font-size:14px; margin-bottom:20px;">Ingrese sus credenciales de acceso:</p>
             <div id="formAlertLogin" class="alert"></div>
             <form onsubmit="ejecutarLogin(event)">
@@ -1509,7 +1510,7 @@
                     tbody.innerHTML = `<tr><td colspan="3" style="text-align: center;">No hay ventas registradas en este rango de fechas.</td></tr>`;
                     return;
                 }
-                tbody.innerHTML = result.porServo?.map || result.porServicio.map(s => `
+                tbody.innerHTML = result.porServicio.map(s => `
                     <tr>
                         <td><strong>${s.servicio_nombre}</strong></td>
                         <td>${s.cantidad_total}</td>
